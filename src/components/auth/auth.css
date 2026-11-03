@@ -1,0 +1,355 @@
+/* CRM Automotivo — Login/Signup split-screen 850×550 com toggle animado.
+   Padrão obrigatório de auth (vide memória feedback_pattern_login_signup). */
+
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 20% 20%, hsl(var(--primary) / 0.15), transparent 40%),
+    radial-gradient(circle at 80% 80%, hsl(var(--primary) / 0.08), transparent 50%),
+    hsl(var(--background));
+  padding: 1.5rem;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.auth-container {
+  position: relative;
+  width: 850px;
+  height: 550px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 30px;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  margin: 20px;
+}
+
+/* form boxes */
+.auth-container .form-box {
+  position: absolute;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: hsl(var(--card));
+  display: flex;
+  align-items: center;
+  color: hsl(var(--foreground));
+  text-align: center;
+  padding: 40px;
+  z-index: 1;
+  transition: 0.6s ease-in-out 1.2s, visibility 0s 1s;
+}
+
+/* Estado inicial: login ocupa a metade direita (right:0 herdado do .form-box).
+   Quando .active, desliza pra esquerda e sai de tela (translateX(-100%)). */
+.auth-container.active .form-box.login {
+  right: 50%;
+  transform: translateX(-100%);
+}
+
+.auth-container .form-box.register {
+  visibility: hidden;
+}
+
+.auth-container.active .form-box.register {
+  visibility: visible;
+}
+
+.auth-container.active .form-box.register {
+  right: 50%;
+  transform: translateX(0);
+}
+
+.auth-container .form-box form {
+  width: 100%;
+}
+
+.auth-container .brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.auth-container .brand-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--primary-foreground));
+}
+
+.auth-container h1 {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.auth-container .input-box {
+  position: relative;
+  margin: 18px 0;
+}
+
+.auth-container .input-box input {
+  width: 100%;
+  padding: 14px 48px 14px 18px;
+  background: hsl(var(--secondary));
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  outline: none;
+  font-size: 15px;
+  color: hsl(var(--foreground));
+  font-weight: 500;
+  font-family: inherit;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.auth-container .input-box input::placeholder {
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
+
+.auth-container .input-box input:focus {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--background));
+}
+
+.auth-container .input-box .input-icon {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: hsl(var(--muted-foreground));
+}
+
+.auth-container .forgot-link {
+  margin: -8px 0 16px;
+  text-align: right;
+}
+
+.auth-container .forgot-link button {
+  background: none;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.auth-container .forgot-link button:hover {
+  color: hsl(var(--primary));
+}
+
+.auth-container .btn-primary {
+  width: 100%;
+  height: 48px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: filter 0.15s, transform 0.15s;
+}
+
+.auth-container .btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.auth-container .btn-primary:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.auth-container .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* toggle box */
+.auth-container .toggle-box {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.auth-container .toggle-box::before {
+  content: '';
+  position: absolute;
+  left: -250%;
+  width: 300%;
+  height: 100%;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, hsl(var(--primary)) 130%);
+  border-radius: 150px;
+  z-index: 2;
+  transition: 1.8s ease-in-out;
+}
+
+.auth-container.active .toggle-box::before {
+  left: 50%;
+}
+
+.auth-container .toggle-panel {
+  position: absolute;
+  width: 50%;
+  height: 100%;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  z-index: 3;
+  transition: 0.6s ease-in-out;
+}
+
+.auth-container .toggle-panel.toggle-left {
+  left: 0;
+  transition-delay: 1.2s;
+}
+
+.auth-container.active .toggle-panel.toggle-left {
+  left: -50%;
+  transition-delay: 0.6s;
+}
+
+.auth-container .toggle-panel.toggle-right {
+  right: -50%;
+  transition-delay: 0.6s;
+}
+
+.auth-container.active .toggle-panel.toggle-right {
+  right: 0;
+  transition-delay: 1.2s;
+}
+
+.auth-container .toggle-panel h1 {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.auth-container .toggle-panel .tagline {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 18px;
+  max-width: 280px;
+}
+
+.auth-container .toggle-panel p {
+  font-size: 14px;
+  margin-bottom: 22px;
+  max-width: 280px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.auth-container .toggle-panel .btn-ghost {
+  width: 160px;
+  height: 46px;
+  background: transparent;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+
+.auth-container .toggle-panel .btn-ghost:hover {
+  background: #fff;
+  color: #0a0a0a;
+}
+
+/* responsive vertical layout */
+@media (max-width: 850px) {
+  .auth-container {
+    width: 100%;
+    max-width: 480px;
+    height: 720px;
+  }
+
+  .auth-container .form-box {
+    bottom: 0;
+    width: 100%;
+    height: 70%;
+    right: 0;
+  }
+
+  .auth-container .form-box.login {
+    right: 0;
+    bottom: 30%;
+  }
+
+  .auth-container.active .form-box.login {
+    right: 0;
+    transform: translateY(-100%);
+  }
+
+  .auth-container.active .form-box.register {
+    right: 0;
+    bottom: 30%;
+    transform: translateY(0);
+  }
+
+  .auth-container .toggle-box::before {
+    left: 0;
+    top: -270%;
+    width: 100%;
+    height: 300%;
+    border-radius: 20vw;
+  }
+
+  .auth-container.active .toggle-box::before {
+    left: 0;
+    top: 70%;
+  }
+
+  .auth-container .toggle-panel {
+    width: 100%;
+    height: 30%;
+    padding: 24px 16px;
+  }
+
+  .auth-container .toggle-panel.toggle-left {
+    top: 0;
+    left: 0;
+  }
+
+  .auth-container.active .toggle-panel.toggle-left {
+    left: 0;
+    top: -30%;
+  }
+
+  .auth-container .toggle-panel.toggle-right {
+    right: 0;
+    bottom: -30%;
+  }
+
+  .auth-container.active .toggle-panel.toggle-right {
+    right: 0;
+    bottom: 0;
+  }
+
+  .auth-container .toggle-panel .tagline {
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+
+  .auth-container .toggle-panel p {
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+}
