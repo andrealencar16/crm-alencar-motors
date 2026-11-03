@@ -8,6 +8,13 @@
       "when": 1793715371065,
       "tag": "0000_fix_invite_membership",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793717306015,
+      "tag": "0001_remove_organization_member",
+      "breakpoints": true
     }
   ]
 }
