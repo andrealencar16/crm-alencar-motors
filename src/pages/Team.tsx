@@ -119,9 +119,22 @@ export default function Team() {
         body: { email: inviteEmail, role: inviteRole, org_id: orgId },
       });
       if (res.error || res.data?.error) {
-        toast({ title: "Erro ao convidar", description: res.data?.error || res.error?.message, variant: "destructive" });
+        let description: string = res.data?.error || res.error?.message || "Erro desconhecido";
+        try {
+          const ctx: any = (res.error as any)?.context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            if (body?.error) description = body.error;
+          }
+        } catch { /* keep default message */ }
+        toast({ title: "Erro ao convidar", description, variant: "destructive" });
       } else {
-        toast({ title: "Convite enviado!", description: `Magic link enviado para ${inviteEmail}` });
+        toast({
+          title: "Convite enviado!",
+          description: res.data?.existing_user
+            ? `${inviteEmail} já tem conta: o convite aparecerá ao entrar no CRM.`
+            : `Magic link enviado para ${inviteEmail}`,
+        });
         setInviteEmail("");
         fetchAll();
       }

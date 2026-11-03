@@ -77,28 +77,57 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Send magic link invite
+    // Is there already an account with this email?
+    const { data: existingProfile } = await serviceClient
+      .from("profiles").select("id, org_id").ilike("email", email).maybeSingle();
+
+    if (existingProfile?.org_id === org_id) {
+      const { data: existingRole } = await serviceClient
+        .from("user_roles").select("id").eq("user_id", existingProfile.id).eq("org_id", org_id).maybeSingle();
+      if (existingRole) {
+        return new Response(JSON.stringify({ error: "Este usuário já é membro da organização" }), {
+          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    let invitedUser = null;
+    let existingUser = false;
     const { data: inviteData, error: inviteError } =
       await serviceClient.auth.admin.inviteUserByEmail(email, {
-        data: { org_id, role: role || "member" },
+        data: { org_id, role },
       });
 
     if (inviteError) {
-      return new Response(JSON.stringify({ error: inviteError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const msg = inviteError.message?.toLowerCase() ?? "";
+      const alreadyExists = msg.includes("already been registered") || msg.includes("already registered") ||
+        (inviteError as any).code === "email_exists";
+      if (!alreadyExists) {
+        return new Response(JSON.stringify({ error: inviteError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Account already exists: just record the invitation; the user accepts it after signing in.
+      existingUser = true;
+    } else {
+      invitedUser = inviteData.user;
     }
 
     // Record invitation
-    await serviceClient.from("invitations").insert({
+    const { error: insertError } = await serviceClient.from("invitations").insert({
       org_id,
       email,
-      role: role || "member",
+      role,
       invited_by: callerId,
     });
+    if (insertError) {
+      return new Response(JSON.stringify({ error: insertError.message }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    return new Response(JSON.stringify({ success: true, user: inviteData.user }), {
+    return new Response(JSON.stringify({ success: true, existing_user: existingUser, user: invitedUser }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
