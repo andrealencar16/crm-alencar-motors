@@ -36,7 +36,10 @@ Deno.serve(async (req) => {
     }
     const callerId = callerUser.id;
 
-    const { email, role, org_id } = await req.json();
+    const body = await req.json();
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const role = body.role === "admin" ? "admin" : "member";
+    const org_id = body.org_id;
 
     if (!email || !org_id) {
       return new Response(JSON.stringify({ error: "Email and org_id are required" }), {
@@ -62,6 +65,15 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: existingInvite } = await serviceClient
+      .from("invitations").select("id").eq("org_id", org_id).ilike("email", email)
+      .is("accepted_at", null).maybeSingle();
+    if (existingInvite) {
+      return new Response(JSON.stringify({ error: "Já existe um convite pendente para este email" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

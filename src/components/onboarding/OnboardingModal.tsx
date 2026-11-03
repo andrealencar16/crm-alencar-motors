@@ -30,7 +30,11 @@ const STEPS = [
 ];
 
 export function OnboardingModal() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+  const [pendingInvites, setPendingInvites] = useState<Array<{ id: string; org_name: string; role: string }>>([]);
+  const [inviteChecked, setInviteChecked] = useState(false);
+  const [accepting, setAccepting] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const navigate = useNavigate();
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -61,6 +65,26 @@ export function OnboardingModal() {
 
     setIsOpen(true);
   }, [user, profile]);
+
+  // Invited users must accept their invitation instead of creating a new organization.
+  useEffect(() => {
+    if (!user || !profile || profile.org_id) { setPendingInvites([]); setInviteChecked(true); return; }
+    setInviteChecked(false);
+    void (async () => {
+      const { data } = await supabase.rpc("get_my_pending_invitations" as never);
+      setPendingInvites(((data as any[]) ?? []).map((i) => ({ id: i.id, org_name: i.org_name, role: i.role })));
+      setInviteChecked(true);
+    })();
+  }, [user, profile]);
+
+  const acceptInvite = useCallback(async (id: string) => {
+    setAccepting(id); setInviteError(null);
+    const { error } = await supabase.rpc("accept_invitation" as never, { p_invitation_id: id } as never);
+    setAccepting(null);
+    if (error) { setInviteError(error.message); return; }
+    await refreshProfile();
+    setIsOpen(false);
+  }, [refreshProfile]);
 
   // Load persisted state once per user.id (resets on logout/login).
   useEffect(() => {
@@ -185,6 +209,31 @@ export function OnboardingModal() {
   }, []);
 
   if (!isOpen) return null;
+  if (!inviteChecked) return null;
+
+  if (pendingInvites.length > 0) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Convite pendente">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+        <div className="relative w-[92vw] max-w-[480px] rounded-2xl border border-border bg-card p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Você foi convidado</h2>
+          <p className="text-sm text-muted-foreground">Aceite o convite para entrar na equipe. Você não precisa criar uma nova concessionária.</p>
+          {pendingInvites.map((inv) => (
+            <div key={inv.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <div className="font-medium text-foreground">{inv.org_name}</div>
+                <div className="text-xs text-muted-foreground">Papel: {inv.role}</div>
+              </div>
+              <Button size="sm" onClick={() => acceptInvite(inv.id)} disabled={!!accepting}>
+                {accepting === inv.id ? "Aceitando..." : "Aceitar convite"}
+              </Button>
+            </div>
+          ))}
+          {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
+        </div>
+      </div>
+    );
+  }
 
   const step = STEPS[currentStep];
   const progress = ((currentStep + 1) / STEPS.length) * 100;
