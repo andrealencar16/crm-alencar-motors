@@ -2785,6 +2785,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      remove_organization_member: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: undefined
+      }
       seed_automotive_pipelines: {
         Args: { p_org_id: string; p_tem_oficina?: boolean }
         Returns: Json
