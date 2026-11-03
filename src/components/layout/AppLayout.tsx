@@ -7,6 +7,8 @@ import { MobileBottomNav } from "./MobileBottomNav";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AICopilot } from "@/components/crm/AICopilot";
 import { OnboardingModal } from "@/components/onboarding/OnboardingModal";
+import { SetPasswordGate } from "@/components/auth/SetPasswordGate";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -15,12 +17,29 @@ export function AppLayout() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  // null = verificando; false = usuário sem senha (ex.: convidado no 1º acesso)
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
       navigate("/");
     }
   }, [user, loading, navigate]);
+
+  // Convidados que entram pelo link de convite ainda não têm senha:
+  // bloquear o CRM até definirem uma. Falha na verificação não bloqueia (fail-open).
+  useEffect(() => {
+    if (!user) {
+      setHasPassword(null);
+      return;
+    }
+    let cancelled = false;
+    supabase.rpc("user_has_password").then(({ data, error }) => {
+      if (cancelled) return;
+      setHasPassword(error ? true : !!data);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -42,6 +61,18 @@ export function AppLayout() {
   }
 
   if (!user) return null;
+
+  if (hasPassword === null) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (hasPassword === false) {
+    return <SetPasswordGate onDone={() => setHasPassword(true)} />;
+  }
 
   return (
     <SidebarProvider>
