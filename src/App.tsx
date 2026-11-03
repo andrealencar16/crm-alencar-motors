@@ -77,6 +77,7 @@ const App = () => (
           <AuthProvider>
             <Routes>
               <Route path="/" element={<Login />} />
+              <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/setup" element={<SuspenseRoute><Setup /></SuspenseRoute>} />
               

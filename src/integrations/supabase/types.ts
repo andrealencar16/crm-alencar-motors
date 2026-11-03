@@ -2821,6 +2821,7 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      user_has_password: { Args: never; Returns: boolean }
       vault_get: { Args: { p_key: string }; Returns: string }
     }
     Enums: {

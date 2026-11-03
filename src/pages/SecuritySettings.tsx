@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrg } from "@/hooks/useOrg";
@@ -6,11 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Shield, Activity, Monitor, Clock, Filter, RefreshCw, LogOut } from "lucide-react";
+import { Shield, Activity, Monitor, Clock, Filter, RefreshCw, LogOut, KeyRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const MIN_PASSWORD_LENGTH = 6;
 
 export default function SecuritySettings() {
   const { user } = useAuth();
@@ -141,17 +145,136 @@ function AuditLogTab({ orgId }: { orgId: string | null }) {
   );
 }
 
+function ChangePasswordCard() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      toast({
+        title: "Senha muito curta",
+        description: `A nova senha deve ter no mínimo ${MIN_PASSWORD_LENGTH} caracteres.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Senhas não conferem",
+        description: "A confirmação deve ser igual à nova senha.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!user?.email) return;
+
+    setSaving(true);
+    // Reautenticação: valida a senha atual antes de permitir a troca.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    });
+    if (verifyError) {
+      setSaving(false);
+      toast({ title: "Senha atual incorreta", variant: "destructive" });
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+      current_password: currentPassword,
+    });
+    setSaving(false);
+
+    if (error) {
+      toast({ title: "Erro ao alterar senha", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Senha alterada com sucesso!" });
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <KeyRound className="h-4 w-4" />Alterar senha
+        </CardTitle>
+        <CardDescription>Informe sua senha atual para definir uma nova</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleChangePassword} className="space-y-4 max-w-sm">
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Senha atual</Label>
+            <Input
+              id="current-password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-password-settings">Nova senha</Label>
+            <Input
+              id="new-password-settings"
+              type="password"
+              placeholder={`Mínimo ${MIN_PASSWORD_LENGTH} caracteres`}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={MIN_PASSWORD_LENGTH}
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password-settings">Confirmar nova senha</Label>
+            <Input
+              id="confirm-password-settings"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={MIN_PASSWORD_LENGTH}
+              autoComplete="new-password"
+            />
+          </div>
+          <Button type="submit" size="sm" disabled={saving}>
+            {saving ? "Salvando..." : "Alterar senha"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SessionsTab() {
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleSignOutAll = async () => {
-    await supabase.auth.signOut({ scope: "global" });
+    const { error } = await supabase.auth.signOut({ scope: "global" });
+    if (error) {
+      toast({ title: "Erro ao encerrar sessões", description: error.message, variant: "destructive" });
+      return;
+    }
     toast({ title: "Todas as sessões foram encerradas" });
-    window.location.href = "/login";
+    navigate("/");
   };
 
   return (
     <div className="space-y-4">
+      <ChangePasswordCard />
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -187,7 +310,7 @@ function SessionsTab() {
         </CardHeader>
         <CardContent>
           <ul className="space-y-1.5 text-sm text-muted-foreground">
-            <li>• Mínimo de 8 caracteres</li>
+            <li>• Mínimo de 6 caracteres</li>
             <li>• Recomendado: letras maiúsculas, minúsculas, números e símbolos</li>
             <li>• Senhas comuns são rejeitadas automaticamente</li>
             <li>• Bloqueio após 5 tentativas de login inválidas</li>
