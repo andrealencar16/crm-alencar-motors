@@ -68,8 +68,7 @@ export default function Team() {
 
   const fetchAll = useCallback(async () => {
     if (!orgId) return;
-    const [{ data: profs }, { data: rl }, { data: inv }, { data: perms }, { data: tms }, { data: tmem }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("org_id", orgId),
+    const [{ data: rl }, { data: inv }, { data: perms }, { data: tms }, { data: tmem }] = await Promise.all([
       supabase.from("user_roles").select("*").eq("org_id", orgId),
       supabase.from("invitations").select("*").eq("org_id", orgId).is("accepted_at", null),
       supabase.from("role_permissions").select("*").eq("org_id", orgId),
@@ -80,9 +79,14 @@ export default function Team() {
     setPermissions(perms || []);
     setTeams(tms || []);
     setTeamMembers(tmem || []);
-    const merged = (profs || []).map((p) => {
-      const r = (rl || []).find((r: any) => r.user_id === p.id);
-      return { ...p, role: r?.role || "member" };
+    // user_roles is the source of truth for active members
+    const ids = (rl || []).map((r: any) => r.user_id);
+    const { data: profs } = ids.length
+      ? await supabase.from("profiles").select("*").in("id", ids)
+      : { data: [] as Profile[] };
+    const merged = (rl || []).flatMap((r: any) => {
+      const p = (profs || []).find((p) => p.id === r.user_id);
+      return p ? [{ ...p, role: r.role as string }] : [];
     });
     setMembers(merged);
   }, [orgId]);
@@ -153,10 +157,15 @@ export default function Team() {
       toast({ title: "Você não pode remover a si mesmo", variant: "destructive" });
       return;
     }
-    await supabase.from("user_roles").delete().eq("user_id", uid).eq("org_id", orgId);
-    await supabase.from("profiles").update({ org_id: null }).eq("id", uid);
-    fetchAll();
+    const { error } = await supabase.rpc("remove_organization_member" as any, { p_org_id: orgId, p_user_id: uid });
+    if (error) {
+      toast({ title: "Não foi possível remover", description: error.message, variant: "destructive" });
+      return;
+    }
+    setMembers((prev) => prev.filter((m) => m.id !== uid));
+    setTeamMembers((prev) => prev.filter((tm: any) => tm.user_id !== uid));
     toast({ title: "Membro removido" });
+    fetchAll();
   };
 
   const cancelInvite = async (id: string) => {
