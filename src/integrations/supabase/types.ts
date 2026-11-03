@@ -2698,6 +2698,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invitation: { Args: { p_invitation_id: string }; Returns: string }
       attach_audit_trigger: { Args: { p_table: unknown }; Returns: undefined }
       create_organization_for_user: {
         Args: {
@@ -2710,6 +2711,16 @@ export type Database = {
       }
       dispatch_repurchase_alerts: { Args: never; Returns: undefined }
       dispatch_service_reminders: { Args: never; Returns: undefined }
+      get_my_pending_invitations: {
+        Args: never
+        Returns: {
+          created_at: string
+          id: string
+          org_id: string
+          org_name: string
+          role: Database["public"]["Enums"]["app_role"]
+        }[]
+      }
       get_repurchase_candidates: {
         Args: { p_org_id: string }
         Returns: {
