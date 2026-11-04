@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,15 +35,17 @@ export function SetPasswordGate({ email, userId, initialName, onDone }: SetPassw
   const [name, setName] = useState(initialName && initialName !== emailPrefix ? initialName : "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  // Recuperável após recarregar: a senha já definida fica marcada nos metadados.
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const saveProfile = async (fullName: string) => {
-    const { error } = await supabase.from("profiles").update({ name: fullName }).eq("id", userId);
-    return error;
-  };
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.user_metadata?.password_set_by_user === true) setPasswordSaved(true);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,29 +54,34 @@ export function SetPasswordGate({ email, userId, initialName, onDone }: SetPassw
     if (invalid) { setError(invalid); return; }
     const fullName = name.trim();
     setLoading(true);
+    const fail = (msg: string) => { setLoading(false); setError(msg); };
 
+    // 1) Senha (somente se ainda não definida)
     if (!passwordSaved) {
       const { error: authErr } = await supabase.auth.updateUser({
         password,
-        data: { full_name: fullName, name: fullName },
+        data: { full_name: fullName, name: fullName, password_set_by_user: true },
       });
-      if (authErr) {
-        setLoading(false);
-        setError("Não foi possível salvar a senha: " + authErr.message);
-        return;
-      }
+      if (authErr) return fail("Não foi possível salvar a senha: " + authErr.message);
       setPasswordSaved(true);
       setPassword(""); setConfirmPassword("");
-    } else {
-      await supabase.auth.updateUser({ data: { full_name: fullName, name: fullName } });
     }
 
-    const profErr = await saveProfile(fullName);
+    // 2) Perfil
+    const { error: profErr } = await supabase.from("profiles").update({ name: fullName }).eq("id", userId);
+    if (profErr) return fail("Sua senha foi salva, mas não conseguimos salvar seu nome. Tente novamente.");
+
+    // 3) Conclui o primeiro acesso (somente após senha + perfil)
+    const { error: metaErr } = await supabase.auth.updateUser({
+      data: { full_name: fullName, name: fullName, first_access_completed: true },
+    });
+    if (metaErr) return fail("Sua senha foi salva, mas não conseguimos concluir a configuração. Tente novamente.");
+
+    // 4) Verifica persistência no servidor
+    const { data: ok, error: chkErr } = await supabase.rpc("user_has_password");
+    if (chkErr || ok !== true) return fail("Não foi possível confirmar a configuração da conta. Tente novamente.");
+
     setLoading(false);
-    if (profErr) {
-      setError("Sua senha foi salva, mas não conseguimos salvar seu nome. Tente novamente.");
-      return;
-    }
     toast({ title: "Conta configurada com sucesso!" });
     onDone();
   };
