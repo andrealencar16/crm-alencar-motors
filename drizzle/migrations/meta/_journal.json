@@ -36,6 +36,13 @@
       "when": 1793794437953,
       "tag": "0004_allow_invited_signup",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793794882131,
+      "tag": "0005_allow_accept_invitation",
+      "breakpoints": true
     }
   ]
 }
