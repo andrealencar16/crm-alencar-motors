@@ -57,6 +57,13 @@
       "when": 1793804130732,
       "tag": "0007_vehicles_commercial_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793805847838,
+      "tag": "0008_api_keys_scopes_and_stock_indexes",
+      "breakpoints": true
     }
   ]
 }

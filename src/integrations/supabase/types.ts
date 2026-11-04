@@ -100,6 +100,7 @@ export type Database = {
           name: string
           org_id: string
           request_count: number | null
+          scopes: string[]
         }
         Insert: {
           created_at?: string | null
@@ -112,6 +113,7 @@ export type Database = {
           name?: string
           org_id: string
           request_count?: number | null
+          scopes?: string[]
         }
         Update: {
           created_at?: string | null
@@ -124,6 +126,7 @@ export type Database = {
           name?: string
           org_id?: string
           request_count?: number | null
+          scopes?: string[]
         }
         Relationships: [
           {
