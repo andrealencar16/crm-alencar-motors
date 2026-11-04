@@ -91,6 +91,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Record invitation
+    const { data: invRow, error: insertError } = await serviceClient.from("invitations").insert({
+      org_id,
+      email,
+      role,
+      invited_by: callerId,
+    }).select("id").single();
+    if (insertError) {
+      return new Response(JSON.stringify({ error: insertError.message }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let invitedUser = null;
     let existingUser = false;
     const { data: inviteData, error: inviteError } =
@@ -103,6 +116,7 @@ Deno.serve(async (req) => {
       const alreadyExists = msg.includes("already been registered") || msg.includes("already registered") ||
         (inviteError as any).code === "email_exists";
       if (!alreadyExists) {
+        await serviceClient.from("invitations").delete().eq("id", invRow.id);
         return new Response(JSON.stringify({ error: inviteError.message }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -114,18 +128,6 @@ Deno.serve(async (req) => {
       invitedUser = inviteData.user;
     }
 
-    // Record invitation
-    const { error: insertError } = await serviceClient.from("invitations").insert({
-      org_id,
-      email,
-      role,
-      invited_by: callerId,
-    });
-    if (insertError) {
-      return new Response(JSON.stringify({ error: insertError.message }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     return new Response(JSON.stringify({ success: true, existing_user: existingUser, user: invitedUser }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
