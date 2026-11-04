@@ -7,7 +7,7 @@ describe("first access setup", () => {
     expect(validateFirstAccess(" ", "secret1", "secret1", false)).toBe("Informe seu nome completo.");
   });
   it("rejects passwords shorter than 6", () => {
-    expect(validateFirstAccess("Ana Lima", "12345", "12345", false)).toMatch(/mínimo de 6/);
+    expect(validateFirstAccess("Ana Lima", "12345", "12345", false)).toMatch(/mínimo 6/);
   });
   it("rejects mismatched passwords", () => {
     expect(validateFirstAccess("Ana Lima", "secret1", "secret2", false)).toMatch(/igual/);
