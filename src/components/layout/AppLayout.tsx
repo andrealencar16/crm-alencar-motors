@@ -11,6 +11,7 @@ import { NoAccessGate } from "@/components/auth/NoAccessGate";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Button } from "@/components/ui/button";
 
 const Spinner = () => (
   <div className="flex h-screen items-center justify-center bg-background">
@@ -23,24 +24,28 @@ export function AppLayout() {
   const { user, loading, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  // null = verificando; false = usuário sem senha (ex.: convidado no 1º acesso)
-  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
+  // null = verificando; "error" = falha na verificação (fail-closed); false = conta sem senha
+  const [hasPassword, setHasPassword] = useState<boolean | null | "error">(null);
   // null = verificando; false = conta sem vínculo em user_roles com a Alencar Motors
   const [isMember, setIsMember] = useState<boolean | null>(null);
+  const { profile } = useAuth();
 
   useEffect(() => {
     if (!loading && !user) navigate("/");
   }, [user, loading, navigate]);
 
-  useEffect(() => {
+  const checkPassword = useCallback(async () => {
     if (!user) { setHasPassword(null); return; }
-    let cancelled = false;
-    supabase.rpc("user_has_password").then(({ data, error }) => {
-      if (cancelled) return;
-      setHasPassword(error ? true : !!data);
-    });
-    return () => { cancelled = true; };
+    setHasPassword(null);
+    // Garante sessão válida no servidor antes da verificação.
+    const { data: u, error: uErr } = await supabase.auth.getUser();
+    if (uErr || !u.user) { setHasPassword("error"); return; }
+    const { data, error } = await supabase.rpc("user_has_password");
+    if (error || typeof data !== "boolean") { setHasPassword("error"); return; }
+    setHasPassword(data);
   }, [user?.id]);
+
+  useEffect(() => { void checkPassword(); }, [checkPassword]);
 
   // user_roles é a única fonte de autorização (fail-closed).
   const checkMembership = useCallback(async () => {
@@ -61,13 +66,35 @@ export function AppLayout() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const doSignOut = async () => { await signOut(); navigate("/"); };
+
   if (loading) return <Spinner />;
   if (!user) return null;
   if (hasPassword === null) return <Spinner />;
-  if (hasPassword === false) return <SetPasswordGate onDone={() => setHasPassword(true)} />;
+  if (hasPassword === "error") {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-background p-4 text-center">
+        <p className="text-sm text-muted-foreground">Não foi possível verificar sua conta. Verifique sua conexão.</p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={doSignOut}>Sair</Button>
+          <Button onClick={() => void checkPassword()}>Tentar novamente</Button>
+        </div>
+      </div>
+    );
+  }
+  if (hasPassword === false) {
+    return (
+      <SetPasswordGate
+        email={user.email}
+        userId={user.id}
+        initialName={profile?.name}
+        onDone={async () => { await refreshProfile(); await checkPassword(); await checkMembership(); }}
+      />
+    );
+  }
   if (isMember === null) return <Spinner />;
   if (isMember === false) {
-    return <NoAccessGate email={user.email} onRetry={checkMembership} onSignOut={async () => { await signOut(); navigate("/"); }} />;
+    return <NoAccessGate email={user.email} onRetry={checkMembership} onSignOut={doSignOut} />;
   }
 
   return (

@@ -1,0 +1,1 @@
+- [x] First-access setup: name + password for invited users (fail-closed checks, recoverable profile save)
