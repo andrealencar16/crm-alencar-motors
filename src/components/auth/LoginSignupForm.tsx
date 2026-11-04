@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, User, Car } from "lucide-react";
+import { Mail, Lock, Car } from "lucide-react";
 
 const COPY = {
   productName: "CRM Automotivo",
@@ -35,7 +35,6 @@ export function LoginSignupForm() {
   const [isActive, setIsActive] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -48,24 +47,6 @@ export function LoginSignupForm() {
       toast({ title: COPY.errorLogin, description: error.message, variant: "destructive" });
     } else {
       navigate("/dashboard");
-    }
-    setLoading(false);
-  };
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name }, emailRedirectTo: window.location.origin },
-    });
-    if (error) {
-      toast({ title: COPY.errorSignup, description: error.message, variant: "destructive" });
-    } else if (data.session) {
-      toast({ title: COPY.successSignup });
-    } else {
-      toast({ title: COPY.successSignup, description: COPY.signupEmailCheck });
     }
     setLoading(false);
   };
@@ -131,67 +112,13 @@ export function LoginSignupForm() {
         </form>
       </div>
 
-      {/* REGISTER */}
-      <div className="form-box register">
-        <form onSubmit={handleSignUp}>
-          <div className="brand">
-            <div className="brand-icon">
-              <Car className="h-5 w-5" />
-            </div>
-            <h1>{COPY.signupTitle}</h1>
-          </div>
-          <div className="input-box">
-            <input
-              type="text"
-              placeholder={COPY.namePlaceholder}
-              aria-label={COPY.namePlaceholder}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoComplete="name"
-            />
-            <User className="input-icon" />
-          </div>
-          <div className="input-box">
-            <input
-              type="email"
-              placeholder={COPY.emailPlaceholder}
-              aria-label={COPY.emailPlaceholder}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-            <Mail className="input-icon" />
-          </div>
-          <div className="input-box">
-            <input
-              type="password"
-              placeholder={COPY.passwordPlaceholder}
-              aria-label={COPY.passwordPlaceholder}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              autoComplete="new-password"
-            />
-            <Lock className="input-icon" />
-          </div>
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? COPY.loadingSignup : COPY.signupCta}
-          </button>
-        </form>
-      </div>
-
       {/* TOGGLE BOX */}
       <div className="toggle-box">
         <div className="toggle-panel toggle-left">
           <h1>{COPY.toggleLoginPanelTitle}</h1>
           <p className="tagline">{COPY.tagline}</p>
           <p>{COPY.toggleLoginPanelText}</p>
-          <button type="button" className="btn-ghost" onClick={() => setIsActive(true)}>
-            {COPY.toggleLoginPanelCta}
-          </button>
+          <p className="tagline">Acesso exclusivo para a equipe Alencar Motors, somente por convite.</p>
         </div>
         <div className="toggle-panel toggle-right">
           <h1>{COPY.toggleSignupPanelTitle}</h1>
