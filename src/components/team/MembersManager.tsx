@@ -34,7 +34,11 @@ const ERRORS: Record<string, string> = {
 const friendly = (msg?: string) => (msg && Object.entries(ERRORS).find(([k]) => msg.includes(k))?.[1]) || msg || "Erro desconhecido";
 
 async function invokeAdmin(body: Record<string, unknown>) {
-  const res = await supabase.functions.invoke("admin-users", { body });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Sessão expirada. Entre novamente.");
+  const res = await supabase.functions.invoke("admin-users", {
+    body, headers: { Authorization: `Bearer ${session.access_token}` },
+  });
   if (res.error) {
     let msg = res.error.message;
     try { const b = await (res.error as any).context?.json(); if (b?.error) msg = b.error; } catch { /* keep */ }
