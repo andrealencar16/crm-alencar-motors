@@ -30,8 +30,9 @@ Deno.serve(async (req) => {
     const userClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user: caller } } = await userClient.auth.getUser();
-    if (!caller) return json({ error: "Não autenticado" }, 401);
+    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(authHeader.replace("Bearer ", ""));
+    if (claimsErr || !claimsData?.claims?.sub) return json({ error: "Não autenticado" }, 401);
+    const caller = { id: claimsData.claims.sub as string };
 
     const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: org } = await admin.from("organizations").select("id").order("created_at").limit(1).single();
