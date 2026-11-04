@@ -31,6 +31,12 @@ export interface Vehicle {
   fipe_price: number | null;
   created_at: string;
   updated_at: string;
+  descricao: string | null;
+  opcionais: string[];
+  accepts_trade: boolean;
+  accepts_financing: boolean;
+  /** INTERNO — nunca exibir em componentes públicos */
+  commercial_notes: string | null;
 }
 
 export type TradeInStatus = "aguardando" | "avaliado" | "aceito" | "rejeitado";
