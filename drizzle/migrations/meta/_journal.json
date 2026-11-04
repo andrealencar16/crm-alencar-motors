@@ -43,6 +43,13 @@
       "when": 1793794882131,
       "tag": "0005_allow_accept_invitation",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793797220734,
+      "tag": "0006_first_access_completed_flag",
+      "breakpoints": true
     }
   ]
 }
