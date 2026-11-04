@@ -109,6 +109,8 @@ Deno.serve(async (req) => {
     const { data: inviteData, error: inviteError } =
       await serviceClient.auth.admin.inviteUserByEmail(email, {
         data: { org_id, role },
+        // Volta para o mesmo site que enviou o convite; a tela de primeiro acesso cuida do resto.
+        redirectTo: `${req.headers.get("origin") || "https://crmalencarmotors.com"}/dashboard`,
       });
 
     if (inviteError) {
