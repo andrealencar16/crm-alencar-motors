@@ -2168,14 +2168,18 @@ export type Database = {
       }
       vehicles: {
         Row: {
+          accepts_financing: boolean
+          accepts_trade: boolean
           ano_fabricacao: number | null
           ano_modelo: number | null
           chassi: string | null
           combustivel: string | null
+          commercial_notes: string | null
           cor: string | null
           created_at: string
           data_entrada: string
           deal_id_atual: string | null
+          descricao: string | null
           fipe_code: string | null
           fipe_price: number | null
           fotos: string[]
@@ -2183,6 +2187,7 @@ export type Database = {
           km: number | null
           marca: string
           modelo: string
+          opcionais: string[]
           org_id: string
           owner_id: string | null
           placa: string | null
@@ -2195,14 +2200,18 @@ export type Database = {
           versao: string | null
         }
         Insert: {
+          accepts_financing?: boolean
+          accepts_trade?: boolean
           ano_fabricacao?: number | null
           ano_modelo?: number | null
           chassi?: string | null
           combustivel?: string | null
+          commercial_notes?: string | null
           cor?: string | null
           created_at?: string
           data_entrada?: string
           deal_id_atual?: string | null
+          descricao?: string | null
           fipe_code?: string | null
           fipe_price?: number | null
           fotos?: string[]
@@ -2210,6 +2219,7 @@ export type Database = {
           km?: number | null
           marca: string
           modelo: string
+          opcionais?: string[]
           org_id: string
           owner_id?: string | null
           placa?: string | null
@@ -2222,14 +2232,18 @@ export type Database = {
           versao?: string | null
         }
         Update: {
+          accepts_financing?: boolean
+          accepts_trade?: boolean
           ano_fabricacao?: number | null
           ano_modelo?: number | null
           chassi?: string | null
           combustivel?: string | null
+          commercial_notes?: string | null
           cor?: string | null
           created_at?: string
           data_entrada?: string
           deal_id_atual?: string | null
+          descricao?: string | null
           fipe_code?: string | null
           fipe_price?: number | null
           fotos?: string[]
@@ -2237,6 +2251,7 @@ export type Database = {
           km?: number | null
           marca?: string
           modelo?: string
+          opcionais?: string[]
           org_id?: string
           owner_id?: string | null
           placa?: string | null
