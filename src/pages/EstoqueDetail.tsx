@@ -276,7 +276,18 @@ export default function EstoqueDetail() {
           <button className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20">
             <X className="h-5 w-5" />
           </button>
+          {lightboxIdx > 0 && (
+            <button aria-label="Anterior" className="absolute left-4 rounded-full bg-background/20 p-2 text-foreground" onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}>
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+          )}
           <img src={vehicle.fotos[lightboxIdx]} alt="" className="max-h-full max-w-full object-contain rounded-lg" />
+          {lightboxIdx < vehicle.fotos.length - 1 && (
+            <button aria-label="Próxima" className="absolute right-4 rounded-full bg-background/20 p-2 text-foreground" onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}>
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          )}
+          <span className="absolute bottom-4 text-sm text-muted-foreground">{lightboxIdx + 1} / {vehicle.fotos.length}{lightboxIdx === 0 ? " · Principal" : ""}</span>
         </div>
       )}
     </div>
