@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Pencil, CheckCircle2, ExternalLink, Loader2, X, Car } from "lucide-react";
+import { ArrowLeft, Pencil, CheckCircle2, ExternalLink, Loader2, X, Car, Lock, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Vehicle,
@@ -288,6 +288,15 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function Block({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-primary">{title}</h3>
+      <dl className="grid grid-cols-2 gap-3 text-sm">{children}</dl>
     </div>
   );
 }
