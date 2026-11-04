@@ -19,6 +19,7 @@ import {
   UserPlus, Shield, Trash2, Plus, Users, Crown, Mail,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { MembersManager } from "@/components/team/MembersManager";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -132,8 +133,8 @@ export default function Team() {
         toast({
           title: "Convite enviado!",
           description: res.data?.existing_user
-            ? `${inviteEmail} já tem conta: o convite aparecerá ao entrar no CRM.`
-            : `Magic link enviado para ${inviteEmail}`,
+            ? `${inviteEmail} já tem conta. Use "Adicionar usuário" para liberar o acesso.`
+            : `Magic link enviado para ${inviteEmail}. Depois que a conta for criada, adicione-o à equipe.`,
         });
         setInviteEmail("");
         fetchAll();
@@ -143,42 +144,6 @@ export default function Team() {
     } finally {
       setInviting(false);
     }
-  };
-
-  const changeRole = async (userId: string, newRole: string) => {
-    if (!orgId) return;
-    if (userId === user?.id) {
-      toast({ title: "Você não pode alterar seu próprio papel", variant: "destructive" });
-      return;
-    }
-    const { error } = await supabase
-      .from("user_roles")
-      .update({ role: newRole } as any)
-      .eq("user_id", userId)
-      .eq("org_id", orgId);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Papel atualizado" });
-      fetchAll();
-    }
-  };
-
-  const removeMember = async (uid: string) => {
-    if (!orgId) return;
-    if (uid === user?.id) {
-      toast({ title: "Você não pode remover a si mesmo", variant: "destructive" });
-      return;
-    }
-    const { error } = await supabase.rpc("remove_organization_member" as any, { p_org_id: orgId, p_user_id: uid });
-    if (error) {
-      toast({ title: "Não foi possível remover", description: error.message, variant: "destructive" });
-      return;
-    }
-    setMembers((prev) => prev.filter((m) => m.id !== uid));
-    setTeamMembers((prev) => prev.filter((tm: any) => tm.user_id !== uid));
-    toast({ title: "Membro removido" });
-    fetchAll();
   };
 
   const cancelInvite = async (id: string) => {
@@ -264,7 +229,7 @@ export default function Team() {
                   <Mail className="h-4 w-4" />
                   Convidar via Magic Link
                 </CardTitle>
-                <CardDescription className="text-xs">O convidado receberá um link de acesso por email</CardDescription>
+                <CardDescription className="text-xs">O convite autoriza a criação da conta. O acesso ao CRM é liberado depois, em "Adicionar usuário".</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex gap-2">
@@ -326,53 +291,9 @@ export default function Team() {
             </Card>
           )}
 
-          {/* Members list */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Membros ({members.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {members.map((m) => (
-                  <div key={m.id} className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/30">
-                    <Avatar className="h-9 w-9">
-                      <AvatarImage src={m.avatar_url || ""} />
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                        {m.name?.charAt(0)?.toUpperCase() || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{m.name || "Sem nome"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{m.email} {m.title ? `· ${m.title}` : ""}</p>
-                    </div>
-                    {isAdmin && m.id !== user?.id ? (
-                      <Select value={m.role || "member"} onValueChange={(v) => changeRole(m.id, v)}>
-                        <SelectTrigger className={`h-7 text-[11px] w-36 gap-1 ${roleColor(m.role || "member")}`}>
-                          {roleIcon(m.role || "member")}
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {currentUserRole === "owner" && <SelectItem value="owner">Proprietário</SelectItem>}
-                          <SelectItem value="admin">Administrador</SelectItem>
-                          <SelectItem value="member">Membro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Badge variant="outline" className={`text-[10px] gap-1 ${roleColor(m.role || "member")}`}>
-                        {roleIcon(m.role || "member")}
-                        {ROLES.find((r) => r.value === m.role)?.label || "Membro"}
-                      </Badge>
-                    )}
-                    {isAdmin && m.id !== user?.id && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeMember(m.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {orgId && (
+            <MembersManager orgId={orgId} members={members} currentUserId={user?.id} currentUserRole={currentUserRole} onChanged={fetchAll} />
+          )}
         </TabsContent>
 
         {/* ── Permissions Tab ── */}

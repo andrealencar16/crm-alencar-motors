@@ -2699,6 +2699,13 @@ export type Database = {
     }
     Functions: {
       accept_invitation: { Args: { p_invitation_id: string }; Returns: string }
+      add_organization_member: {
+        Args: {
+          p_role?: Database["public"]["Enums"]["app_role"]
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       attach_audit_trigger: { Args: { p_table: unknown }; Returns: undefined }
       create_organization_for_user: {
         Args: {
@@ -2751,6 +2758,7 @@ export type Database = {
         Args: { p_deal_id: string; p_vehicle_id: string }
         Returns: Json
       }
+      main_org_id: { Args: never; Returns: string }
       move_deal_to_stage: {
         Args: { p_deal_id: string; p_stage_id: string }
         Returns: {
@@ -2785,6 +2793,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      my_role: { Args: never; Returns: Database["public"]["Enums"]["app_role"] }
+      prepare_user_deletion: {
+        Args: { p_transfer_to: string; p_user_id: string }
+        Returns: Json
+      }
       remove_organization_member: {
         Args: { p_org_id: string; p_user_id: string }
         Returns: undefined
@@ -2817,10 +2830,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_member_role: {
+        Args: {
+          p_role: Database["public"]["Enums"]["app_role"]
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       user_belongs_to_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      user_dependency_counts: { Args: { p_user_id: string }; Returns: Json }
       user_has_password: { Args: never; Returns: boolean }
       vault_get: { Args: { p_key: string }; Returns: string }
     }
