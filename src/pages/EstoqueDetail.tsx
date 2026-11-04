@@ -167,16 +167,23 @@ export default function EstoqueDetail() {
             <p className="mt-2 text-2xl font-bold text-primary">{formatCurrencyBRL(vehicle.preco_venda)}</p>
           </div>
 
-          <dl className="grid grid-cols-2 gap-3 text-sm">
+          <Block title="Identificação">
+            <Info label="Placa" value={vehicle.placa ?? "—"} />
+            <Info label="Chassi" value={vehicle.chassi ?? "—"} />
+            <Info label="Renavam" value={vehicle.renavam ?? "—"} />
+          </Block>
+          <Block title="Características técnicas">
             <Info label="Ano" value={`${vehicle.ano_fabricacao ?? "—"}/${vehicle.ano_modelo ?? "—"}`} />
             <Info label="KM" value={vehicle.km != null ? `${vehicle.km.toLocaleString("pt-BR")}` : "—"} />
             <Info label="Cor" value={vehicle.cor ?? "—"} />
-            <Info label="Placa" value={vehicle.placa ?? "—"} />
             <Info label="Combustível" value={vehicle.combustivel ?? "—"} />
             <Info label="Transmissão" value={vehicle.transmissao ?? "—"} />
+          </Block>
+          <Block title="Informações comerciais">
             <Info label="FIPE" value={formatCurrencyBRL(vehicle.fipe_price)} />
-            <Info label="Custo" value={formatCurrencyBRL(vehicle.preco_custo)} />
-          </dl>
+            <Info label="Aceita troca" value={vehicle.accepts_trade ? "Sim" : "Não"} />
+            <Info label="Financiamento" value={vehicle.accepts_financing ? "Sim" : "Não"} />
+          </Block>
 
           <div className="space-y-2">
             <Button onClick={() => setEditOpen(true)} variant="outline" size="sm" className="w-full">
@@ -197,6 +204,31 @@ export default function EstoqueDetail() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <section className="lg:col-span-2 space-y-4 rounded-xl border border-border p-4">
+          <h2 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Descrição e opcionais</h2>
+          {vehicle.descricao ? (
+            <p className="text-sm whitespace-pre-line">{vehicle.descricao}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Sem descrição comercial.</p>
+          )}
+          <div className="flex flex-wrap gap-1.5">
+            {(vehicle.opcionais ?? []).map((o) => <Badge key={o} variant="secondary">{o}</Badge>)}
+            {(vehicle.opcionais ?? []).length === 0 && <p className="text-xs text-muted-foreground">Nenhum opcional informado.</p>}
+          </div>
+        </section>
+        <section className="space-y-3 rounded-xl border border-dashed border-border bg-muted/30 p-4">
+          <h2 className="flex items-center gap-1.5 font-semibold text-sm uppercase tracking-wider text-muted-foreground">
+            <Lock className="h-3.5 w-3.5" /> Informações internas
+          </h2>
+          <Info label="Preço de custo" value={formatCurrencyBRL(vehicle.preco_custo)} />
+          <div>
+            <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Observações</dt>
+            <dd className="text-sm whitespace-pre-line">{vehicle.commercial_notes || "—"}</dd>
+          </div>
+        </section>
       </div>
 
       <section className="space-y-2">
