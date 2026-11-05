@@ -28,8 +28,11 @@ páginas que usam componentes/tokens compartilhados recebem a nova paleta.
 
 Login mantém os handlers, campos e fluxo existentes. Apenas a apresentação passa
 a cartão centralizado responsivo com cabeçalho vinho/vermelho e sem transições de
-painel. Logo oficial será fornecida posteriormente pelo usuário; identificação
-provisória é texto simples, sem reconstrução ou criação de logo.
+painel. A identificação
+é feita com o arquivo oficial `public/alencar-motors-logo.webp`, fornecido pelo
+usuário e copiado sem alterações. O componente BrandLogo é compartilhado pelo
+login e pelo menu, usando fundo branco fixo para preservar o contraste da arte
+preta em ambos os temas, sem filtros, recortes ou reconstrução.
 
 Arquivos de implementação alterados:
 
@@ -44,7 +47,7 @@ Arquivos de implementação alterados:
 
 ## Pendências
 
-Inserir a logo oficial quando fornecida. Não houve revisão visual autenticada de
+Logo oficial incorporada ao login e menu. Não houve revisão visual autenticada de
 todas as páginas com dados reais; nenhum dado real é necessário para homologar a
 identidade. Cores azuis que representam categoria de atividade, auditoria ou métrica
 foram preservadas por terem significado semântico, não por serem marca do produto.

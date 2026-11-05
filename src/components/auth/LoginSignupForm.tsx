@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const COPY = {
   productName: "Alencar Motors CRM",
@@ -112,6 +113,7 @@ export function LoginSignupForm() {
       {/* TOGGLE BOX */}
       <div className="toggle-box">
         <div className="toggle-panel toggle-left">
+          <BrandLogo className="mb-4" />
           <h1>{COPY.productName}</h1>
           <p className="tagline">{COPY.tagline}</p>
           <p>{COPY.toggleLoginPanelText}</p>

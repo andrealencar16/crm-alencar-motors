@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 import {
   LayoutDashboard,
   Users,
@@ -119,9 +120,10 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-        <SidebarHeader className="p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold tracking-tight">{collapsed ? "AM" : "Alencar Motors CRM"}</span>
+        <SidebarHeader className={collapsed ? "p-2" : "p-4"}>
+          <div className="flex flex-col items-start gap-2">
+            <BrandLogo compact={collapsed} />
+            {!collapsed && <span className="text-xs font-medium text-sidebar-foreground/75">Alencar Motors CRM</span>}
           </div>
         </SidebarHeader>
         <SidebarContent>
