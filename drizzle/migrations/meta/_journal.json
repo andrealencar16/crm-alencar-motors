@@ -92,6 +92,13 @@
       "when": 1793910000000,
       "tag": "0012_revendamais_review_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793912248410,
+      "tag": "0013_revendamais_phase1_view_only",
+      "breakpoints": true
     }
   ]
 }

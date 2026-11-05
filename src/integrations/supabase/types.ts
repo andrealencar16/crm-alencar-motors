@@ -1661,6 +1661,202 @@ export type Database = {
           },
         ]
       }
+      revendamais_lead_receipts: {
+        Row: {
+          channel_external_id: string | null
+          channel_name: string | null
+          contact_id: string | null
+          content_digest: string
+          deal_id: string | null
+          dealer_id: string | null
+          delivery_attempt_id: string | null
+          external_id: string | null
+          id: string
+          identity_confirmed: boolean
+          interaction_lead_ids: Json
+          org_id: string
+          portal: string | null
+          possible_related_receipt_id: string | null
+          processed_at: string | null
+          provider: string
+          reason: string | null
+          received_at: string
+          retry_identity_status: string
+          retry_lead_id: string | null
+          retry_relation: string
+          review_expires_at: string | null
+          review_lead: Json | null
+          source_created_at: string | null
+          source_lead_id_hint: string | null
+          status: string
+          unknown_interaction_authorship: string | null
+          unknown_interaction_created_at: string | null
+          unknown_interaction_index: number | null
+          unknown_interaction_text: string | null
+          unknown_text_disposition: string
+          unknown_text_expires_at: string | null
+          unknown_text_present: boolean
+        }
+        Insert: {
+          channel_external_id?: string | null
+          channel_name?: string | null
+          contact_id?: string | null
+          content_digest: string
+          deal_id?: string | null
+          dealer_id?: string | null
+          delivery_attempt_id?: string | null
+          external_id?: string | null
+          id?: string
+          identity_confirmed: boolean
+          interaction_lead_ids?: Json
+          org_id: string
+          portal?: string | null
+          possible_related_receipt_id?: string | null
+          processed_at?: string | null
+          provider?: string
+          reason?: string | null
+          received_at?: string
+          retry_identity_status?: string
+          retry_lead_id?: string | null
+          retry_relation?: string
+          review_expires_at?: string | null
+          review_lead?: Json | null
+          source_created_at?: string | null
+          source_lead_id_hint?: string | null
+          status: string
+          unknown_interaction_authorship?: string | null
+          unknown_interaction_created_at?: string | null
+          unknown_interaction_index?: number | null
+          unknown_interaction_text?: string | null
+          unknown_text_disposition?: string
+          unknown_text_expires_at?: string | null
+          unknown_text_present?: boolean
+        }
+        Update: {
+          channel_external_id?: string | null
+          channel_name?: string | null
+          contact_id?: string | null
+          content_digest?: string
+          deal_id?: string | null
+          dealer_id?: string | null
+          delivery_attempt_id?: string | null
+          external_id?: string | null
+          id?: string
+          identity_confirmed?: boolean
+          interaction_lead_ids?: Json
+          org_id?: string
+          portal?: string | null
+          possible_related_receipt_id?: string | null
+          processed_at?: string | null
+          provider?: string
+          reason?: string | null
+          received_at?: string
+          retry_identity_status?: string
+          retry_lead_id?: string | null
+          retry_relation?: string
+          review_expires_at?: string | null
+          review_lead?: Json | null
+          source_created_at?: string | null
+          source_lead_id_hint?: string | null
+          status?: string
+          unknown_interaction_authorship?: string | null
+          unknown_interaction_created_at?: string | null
+          unknown_interaction_index?: number | null
+          unknown_interaction_text?: string | null
+          unknown_text_disposition?: string
+          unknown_text_expires_at?: string | null
+          unknown_text_present?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revendamais_lead_receipts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revendamais_lead_receipts_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revendamais_lead_receipts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revendamais_lead_receipts_possible_related_receipt_id_fkey"
+            columns: ["possible_related_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "revendamais_lead_receipts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revendamais_review_approvals: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          approved_receipt_id: string | null
+          contact_id: string | null
+          deal_id: string | null
+          group_key: string
+          org_id: string
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          approved_receipt_id?: string | null
+          contact_id?: string | null
+          deal_id?: string | null
+          group_key: string
+          org_id: string
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          approved_receipt_id?: string | null
+          contact_id?: string | null
+          deal_id?: string | null
+          group_key?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revendamais_review_approvals_approved_receipt_id_fkey"
+            columns: ["approved_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "revendamais_lead_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revendamais_review_approvals_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revendamais_review_approvals_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revendamais_review_approvals_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       risk_rules: {
         Row: {
           applies_to: string
@@ -1904,6 +2100,59 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_api_keys: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          is_active: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          org_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          scopes: string[]
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          is_active?: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          org_id: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scopes?: string[]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_active?: boolean
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          org_id?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scopes?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_api_keys_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -2724,6 +2973,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      approve_revendamais_lead: {
+        Args: { p_receipt_id: string }
+        Returns: Json
+      }
       attach_audit_trigger: { Args: { p_table: unknown }; Returns: undefined }
       create_organization_for_user: {
         Args: {
@@ -2745,6 +2998,10 @@ export type Database = {
           org_name: string
           role: Database["public"]["Enums"]["app_role"]
         }[]
+      }
+      get_pending_revendamais_leads: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json
       }
       get_repurchase_candidates: {
         Args: { p_org_id: string }
@@ -2820,6 +3077,38 @@ export type Database = {
         Args: { p_org_id: string; p_user_id: string }
         Returns: undefined
       }
+      revendamais_commit_lead: {
+        Args: {
+          p_identity_confirmed?: boolean
+          p_lead: Json
+          p_metadata?: Json
+          p_unknown_text_retention_approved?: boolean
+        }
+        Returns: Json
+      }
+      revendamais_local_date_valid: {
+        Args: { p_value: string }
+        Returns: boolean
+      }
+      revendamais_match_phone: { Args: { p_phone: string }; Returns: string }
+      revendamais_purge_expired_reviews: { Args: never; Returns: number }
+      revendamais_review_group_completed: {
+        Args: { p_key: string; p_org: string }
+        Returns: boolean
+      }
+      revendamais_review_group_key: {
+        Args: {
+          p: Database["public"]["Tables"]["revendamais_lead_receipts"]["Row"]
+        }
+        Returns: string
+      }
+      revendamais_review_org: { Args: never; Returns: string }
+      revendamais_review_scope_conflict: {
+        Args: {
+          p: Database["public"]["Tables"]["revendamais_lead_receipts"]["Row"]
+        }
+        Returns: boolean
+      }
       seed_automotive_pipelines: {
         Args: { p_org_id: string; p_tem_oficina?: boolean }
         Returns: Json
@@ -2847,6 +3136,36 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      stock_catalog_read: {
+        Args: {
+          p_ano_max?: number
+          p_ano_min?: number
+          p_combustivel?: string
+          p_id?: string
+          p_key_hash: string
+          p_limit?: number
+          p_marca?: string
+          p_modelo?: string
+          p_page?: number
+          p_preco_max?: number
+          p_preco_min?: number
+          p_resource: string
+          p_sort?: string
+          p_transmissao?: string
+        }
+        Returns: Json
+      }
+      stock_key_admin_create: { Args: { p_name: string }; Returns: Json }
+      stock_key_admin_list: {
+        Args: { p_limit?: number; p_page?: number }
+        Returns: Json
+      }
+      stock_key_admin_org: { Args: never; Returns: string }
+      stock_key_admin_revoke: { Args: { p_id: string }; Returns: Json }
+      stock_key_metadata: {
+        Args: { p_key: Database["public"]["Tables"]["stock_api_keys"]["Row"] }
+        Returns: Json
       }
       update_member_role: {
         Args: {
