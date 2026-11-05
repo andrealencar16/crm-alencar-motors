@@ -1,17 +1,29 @@
-// PREPARED ONLY. Never invoked by npm/node unit tests. Requires installed postgres.
+// PREPARED ONLY. Successful DB path is never invoked by unit tests.
+// Guard unit test invokes this script with a REMOTE URL and checks early rejection.
 // Separate two-session test; SQL fixture above rolls back and leaves empty tables.
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { validateLabUrl, assertCleanPgEnvironment, assertLocalLabContainer, lab } from './lab-connection.mjs';
 if (process.env.REVENDAMAIS_TEST_DISPOSABLE !== 'YES') throw new Error('Explicit disposable test opt-in required');
 const url = process.env.REVENDAMAIS_TEST_DATABASE_URL;
-if (!url || new URL(url).pathname !== '/revendamais_leads_test') throw new Error('Wrong disposable database name');
-const { default: postgres } = await import('postgres');
-const sql = postgres(url, { max: 2, onnotice: () => {} });
+const connection = validateLabUrl(url); // Reject remote/query overrides BEFORE driver/Docker/SQL.
+assertCleanPgEnvironment(process.env);
+assertLocalLabContainer();
+const postgres = createRequire(new URL('./lab/package.json', import.meta.url))('postgres');
+const sql = postgres({ ...connection, onnotice: () => {},
+  connection: { application_name: 'revendamais-disposable-lab', statement_timeout: 10000 } });
 try {
   const [db] = await sql`select current_database() as name`;
   assert.equal(db.name, 'revendamais_leads_test');
+  const [identity] = await sql`select current_setting('server_version_num')::integer / 10000 as major,
+    current_user as actor, (select marker from public.revendamais_lab_identity) as marker`;
+  assert.equal(identity.major, 17);
+  assert.equal(identity.actor, lab.user);
+  assert.equal(identity.marker, lab.marker);
   const [before] = await sql`select (select count(*) from public.contacts)::int as c,
-    (select count(*) from public.deals)::int as d, (select count(*) from public.revendamais_lead_receipts)::int as r`;
-  assert.deepEqual(before, { c: 0, d: 0, r: 0 });
+    (select count(*) from public.deals)::int as d, (select count(*) from public.activities)::int as a,
+    (select count(*) from public.revendamais_lead_receipts)::int as r`;
+  assert.deepEqual(before, { c: 0, d: 0, a: 0, r: 0 });
   const lead = { name: 'Pessoa Ficticia', phone: '+5585999990000', email: 'fiction@example.invalid',
     title: 'Concorrencia ficticia', firstMessage: 'Teste', portal: null, externalId: 'concurrency-fixture' };
   const deliver = (event = lead) => sql.begin(async tx => {

@@ -1,0 +1,12 @@
+{
+  "container": "alencar-revendamais-pg17-lab",
+  "label": "alencar.revendamais.disposable",
+  "labelValue": "pg17-v1",
+  "image": "postgres:17-bookworm",
+  "host": "127.0.0.1",
+  "port": 55432,
+  "database": "revendamais_leads_test",
+  "user": "revendamais_lab",
+  "password": "public_fixture_for_disposable_lab_only",
+  "marker": "alencar-revendamais-pg17-disposable-v1"
+}
