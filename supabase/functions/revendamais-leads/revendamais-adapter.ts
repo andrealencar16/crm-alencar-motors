@@ -29,6 +29,12 @@ function identifier(value: unknown): string | null {
   if (typeof value === "number") return Number.isSafeInteger(value) && value > 0 ? String(value) : null;
   return typeof value === "string" && /^[1-9][0-9]{0,39}$/.test(value) ? value : null;
 }
+/** Same validation as identifier(), but the result is statically known to be a string. */
+function requiredIdentifier(value: unknown): string {
+  const id = identifier(value);
+  if (id === null) throw new Error("invalid_revendamais_configuration");
+  return id;
+}
 function str(value: unknown, max: number): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string" || value.length > max || value.includes("\0")) invalid();
@@ -134,8 +140,7 @@ function boundedJson(raw: unknown): void {
 export function createRevendaMaisAdapter(config: RevendaMaisConfig): {
   map: LeadAdapter; inspect: (raw: unknown) => RevendaMaisEvent;
 } {
-  const dealer = identifier(config.authorizedDealerId);
-  if (!dealer) throw new Error("invalid_revendamais_configuration");
+  const dealer = requiredIdentifier(config.authorizedDealerId);
   const policy = config.customerInteraction ? {
     direction: config.customerInteraction.direction, typeIds: [...config.customerInteraction.typeIds],
   } : null;
