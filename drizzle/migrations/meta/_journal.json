@@ -71,6 +71,13 @@
       "when": 1793880000000,
       "tag": "0009_stock_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793890000000,
+      "tag": "0010_stock_catalog_read",
+      "breakpoints": true
     }
   ]
 }

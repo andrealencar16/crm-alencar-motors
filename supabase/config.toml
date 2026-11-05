@@ -1,1 +1,5 @@
 project_id = "etoowzyrdoiqyjnnidyx"
+
+# stock-api validates opaque stock credentials itself; they are not Auth JWTs.
+[functions.stock-api]
+verify_jwt = false
