@@ -8,7 +8,7 @@ let Drawer: typeof import("@/components/crm/PendingRevendaMaisLeads").PendingRev
 const id="a0000000-0000-4000-8000-000000000001";
 const item={receipt_id:id,name:"Pessoa Fictícia",phone:null,email:null,title:"Interesse fictício",portal:null,channel_name:null,
   source_created_at:null,received_at:"2026-09-17T11:49:53Z",attempt_count:4,identity_status:"consistent",approval_blocker:null};
-beforeAll(async()=>{vi.stubEnv("VITE_REVENDAMAIS_REVIEW_ENABLED","true");Drawer=(await import("@/components/crm/PendingRevendaMaisLeads")).PendingRevendaMaisLeads;});
+beforeAll(async()=>{vi.stubEnv("VITE_REVENDAMAIS_REVIEW_ENABLED","true");vi.stubEnv("VITE_REVENDAMAIS_APPROVAL_ENABLED","true");Drawer=(await import("@/components/crm/PendingRevendaMaisLeads")).PendingRevendaMaisLeads;});
 afterAll(()=>vi.unstubAllEnvs());
 beforeEach(()=>{mocks.rpc.mockReset();mocks.toast.mockReset();mocks.rpc.mockResolvedValue({data:{total:1,items:[item]},error:null});});
 afterEach(cleanup);
@@ -45,5 +45,20 @@ describe("gaveta de revisão (RPCs simuladas, sem acesso ao banco)",()=>{
   it("shows empty state only for confirmed total zero",async()=>{
     mocks.rpc.mockResolvedValue({data:{total:0,items:[]},error:null});render(<Drawer onApproved={vi.fn()}/>);
     fireEvent.click(screen.getByRole("button",{name:/Leads Pendentes/}));expect(await screen.findByText("Nenhum lead pendente de revisão.")).toBeInTheDocument();
+  });
+});
+describe("fase 1: aprovação desabilitada por flag (RPC bloqueada no banco)",()=>{
+  it("mantém o botão indisponível e nunca chama approve_revendamais_lead",async()=>{
+    vi.resetModules();vi.stubEnv("VITE_REVENDAMAIS_APPROVAL_ENABLED","false");
+    const { PendingRevendaMaisLeads: DrawerSemAprovacao } = await import("@/components/crm/PendingRevendaMaisLeads");
+    mocks.rpc.mockResolvedValue({data:{total:1,items:[item]},error:null});
+    render(<DrawerSemAprovacao onApproved={vi.fn()}/>);await openDrawer();
+    fireEvent.click(screen.getByRole("button",{name:/Pessoa Fictícia/}));
+    const botao=screen.getByRole("button",{name:"Aprovar e Criar Negócio"});
+    expect(botao).toBeDisabled();
+    expect(screen.getByText(/será habilitada em uma próxima fase/)).toBeInTheDocument();
+    fireEvent.click(botao);
+    expect(mocks.rpc.mock.calls.filter(([name])=>name==="approve_revendamais_lead")).toHaveLength(0);
+    vi.stubEnv("VITE_REVENDAMAIS_APPROVAL_ENABLED","true");
   });
 });
