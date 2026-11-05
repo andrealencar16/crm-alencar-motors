@@ -100,7 +100,8 @@ function PendingReviewDrawer({ active, onApproved }: { active: boolean; onApprov
   }}>
     <SheetTrigger asChild>
       <Button size="sm" variant="outline" className="gap-1.5" aria-label={`Leads Pendentes${page && !error ? `: ${page.total}` : ""}`}>
-        <Inbox className="h-3.5 w-3.5" />Leads Pendentes
+        <Inbox className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Leads Pendentes</span>
         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Carregando pendências" /> : page && !error ? <span className="rounded bg-muted px-1.5 text-xs">{page.total}</span> : null}
       </Button>
     </SheetTrigger>
