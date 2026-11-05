@@ -96,7 +96,7 @@ export function AppSidebar() {
     <SidebarGroup>
       <SidebarGroupContent>
         {label && !collapsed && (
-          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/65">
             {label}
           </p>
         )}
@@ -104,7 +104,7 @@ export function AppSidebar() {
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                <NavLink to={item.url} end={item.url === "/dashboard"} className="hover:bg-accent/50" activeClassName="bg-accent text-accent-foreground font-medium">
+                <NavLink to={item.url} end={item.url === "/dashboard"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-primary text-sidebar-primary-foreground font-medium hover:bg-sidebar-primary">
                   <item.icon className="h-4 w-4" />
                   {!collapsed && <span>{item.title}</span>}
                 </NavLink>
@@ -118,13 +118,10 @@ export function AppSidebar() {
 
   return (
     <>
-      <Sidebar collapsible="icon" className="border-r border-border">
+      <Sidebar collapsible="icon" className="border-r border-sidebar-border">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Car className="h-4 w-4 text-primary-foreground" />
-            </div>
-            {!collapsed && <span className="text-lg font-semibold tracking-tight">CRM Automotivo</span>}
+            <span className="text-sm font-semibold tracking-tight">{collapsed ? "AM" : "Alencar Motors CRM"}</span>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -132,7 +129,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupContent>
               {!collapsed && (
-                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/65">
                   Geral
                 </p>
               )}
@@ -140,7 +137,7 @@ export function AppSidebar() {
                 {generalItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                      <NavLink to={item.url} end={item.url === "/dashboard"} className="hover:bg-accent/50" activeClassName="bg-accent text-accent-foreground font-medium">
+                      <NavLink to={item.url} end={item.url === "/dashboard"} className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-primary text-sidebar-primary-foreground font-medium hover:bg-sidebar-primary">
                         <item.icon className="h-4 w-4" />
                         {!collapsed && <span>{item.title}</span>}
                       </NavLink>
@@ -148,7 +145,7 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 ))}
                 <SidebarMenuItem>
-                  <SidebarMenuButton tooltip="Em Risco" onClick={() => setAtRiskOpen(true)} className="hover:bg-accent/50 cursor-pointer">
+                  <SidebarMenuButton tooltip="Em Risco" onClick={() => setAtRiskOpen(true)} className="hover:bg-sidebar-accent/50 cursor-pointer">
                     <AlertTriangle className="h-4 w-4" />{!collapsed && <span>Em Risco</span>}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -160,7 +157,7 @@ export function AppSidebar() {
           {renderNavGroup(analyticsItems, "Analytics")}
           {renderNavGroup(adminItems, "Admin")}
         </SidebarContent>
-        <SidebarFooter className="border-t border-border p-3">
+        <SidebarFooter className="border-t border-sidebar-border p-3">
           <div className="flex items-center gap-3">
             <Avatar className="h-8 w-8">
               <AvatarImage src={profile?.avatar_url || ""} />
@@ -169,11 +166,11 @@ export function AppSidebar() {
             {!collapsed && (
               <div className="flex flex-1 flex-col overflow-hidden">
                 <span className="truncate text-sm font-medium">{profile?.name || "Usuário"}</span>
-                <span className="truncate text-xs text-muted-foreground">{profile?.email}</span>
+                <span className="truncate text-xs text-sidebar-foreground/65">{profile?.email}</span>
               </div>
             )}
             {!collapsed && (
-              <button onClick={signOut} className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+              <button onClick={signOut} className="rounded-md p-1.5 text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors">
                 <LogOut className="h-4 w-4" />
               </button>
             )}

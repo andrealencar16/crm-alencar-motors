@@ -147,7 +147,7 @@ export default function Dashboard() {
     setDeals((dRes.data as Deal[]) || []);
     setStages((sRes.data as Stage[]) || []);
 
-    // Detect automotive segment (CRM Automotivo) from organizations.settings.
+    // Detect automotive segment (Alencar Motors CRM) from organizations.settings.
     const { data: org } = await supabase
       .from("organizations")
       .select("settings")
@@ -367,7 +367,7 @@ export default function Dashboard() {
   if (!orgId) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <h2 className="mb-2 text-xl font-semibold">Bem-vindo ao CRM Automotivo!</h2>
+        <h2 className="mb-2 text-xl font-semibold">Bem-vindo ao Alencar Motors CRM!</h2>
         <p className="text-muted-foreground">Vá em Configurações para criar sua organização.</p>
       </div>
     );
@@ -381,7 +381,7 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-xs text-muted-foreground">
             Atualizado {lastRefresh.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            {isAutomotive && <span className="ml-2 text-primary">· CRM Automotivo</span>}
+            {isAutomotive && <span className="ml-2 text-primary">· Alencar Motors CRM</span>}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

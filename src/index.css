@@ -6,34 +6,40 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 240 5% 96%;
     --foreground: 0 0% 8%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 8%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 8%;
-    --primary: 0 74% 50%;
+    --primary: 346 75% 32%;
+    --primary-hover: 346 75% 26%;
+    --brand-red: 348 78% 45%;
+    --brand-wine: 346 75% 32%;
+    --brand-ink: 240 4% 9%;
+    --surface-shadow: 0 4px 20px hsl(240 10% 10% / 0.045);
+    --overlay-shadow: 0 18px 60px hsl(240 10% 10% / 0.14);
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 8%;
     --muted: 0 0% 96%;
     --muted-foreground: 0 0% 40%;
-    --accent: 0 0% 94%;
+    --accent: 346 25% 94%;
     --accent-foreground: 0 0% 8%;
     --destructive: 0 84% 55%;
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 90%;
     --input: 0 0% 90%;
-    --ring: 0 74% 50%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 8%;
+    --ring: 346 75% 32%;
+    --radius: 0.75rem;
+    --sidebar-background: 240 4% 9%;
     --sidebar-foreground: 0 0% 88%;
-    --sidebar-primary: 0 74% 50%;
+    --sidebar-primary: 346 75% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 14%;
     --sidebar-accent-foreground: 0 0% 96%;
     --sidebar-border: 0 0% 14%;
-    --sidebar-ring: 0 74% 50%;
+    --sidebar-ring: 348 78% 60%;
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
@@ -47,27 +53,30 @@
     --card-foreground: 0 0% 96%;
     --popover: 0 0% 9%;
     --popover-foreground: 0 0% 96%;
-    --primary: 0 74% 55%;
+    --primary: 346 70% 43%;
+    --primary-hover: 346 70% 36%;
+    --surface-shadow: 0 4px 20px hsl(0 0% 0% / 0.16);
+    --overlay-shadow: 0 18px 60px hsl(0 0% 0% / 0.4);
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 13%;
     --secondary-foreground: 0 0% 96%;
     --muted: 0 0% 13%;
     --muted-foreground: 0 0% 62%;
-    --accent: 0 0% 14%;
+    --accent: 346 15% 16%;
     --accent-foreground: 0 0% 96%;
     --destructive: 0 75% 50%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 16%;
     --input: 0 0% 16%;
-    --ring: 0 74% 55%;
+    --ring: 348 85% 70%;
     --sidebar-background: 0 0% 4%;
     --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 0 74% 55%;
+    --sidebar-primary: 346 75% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 12%;
     --sidebar-accent-foreground: 0 0% 96%;
     --sidebar-border: 0 0% 14%;
-    --sidebar-ring: 0 74% 55%;
+    --sidebar-ring: 348 85% 70%;
     --success: 142 71% 45%;
     --success-foreground: 0 0% 98%;
     --warning: 38 92% 50%;
@@ -141,4 +150,9 @@
   animation-duration: 200ms;
   animation-timing-function: ease-out;
   animation-fill-mode: both;
+}
+
+@layer base {
+  :root { color-scheme: light; }
+  .dark { color-scheme: dark; }
 }

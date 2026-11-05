@@ -19,7 +19,7 @@ export function WelcomeStep({ userName, onNext }: OnboardingStepProps) {
 
       <div className="space-y-2">
         <h2 className="text-2xl font-bold tracking-tight">
-          Bem-vindo ao CRM Automotivo, {firstName}
+          Bem-vindo ao Alencar Motors CRM, {firstName}
         </h2>
         <p className="text-muted-foreground max-w-md mx-auto">
           Vamos configurar sua concessionária em menos de 5 minutos: dados da empresa, pipelines de venda e

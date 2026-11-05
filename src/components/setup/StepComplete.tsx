@@ -39,7 +39,7 @@ export function StepComplete({ completedSteps, onFinish }: StepCompleteProps) {
       <div>
         <h2 className="text-2xl font-bold">Setup completo!</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Seu CRM Automotivo está pronto para uso. Confira o que foi configurado:
+          Seu Alencar Motors CRM está pronto para uso. Confira o que foi configurado:
         </p>
       </div>
 

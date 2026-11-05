@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, Car } from "lucide-react";
+import { Mail, Lock } from "lucide-react";
 
 const COPY = {
-  productName: "CRM Automotivo",
-  tagline: "O CRM que fecha o ciclo do automotivo PME",
+  productName: "Alencar Motors CRM",
+  tagline: "Relacionamentos que movem negócios.",
   loginTitle: "Entrar",
   signupTitle: "Cadastrar",
   emailPlaceholder: "voce@suaconcessionaria.com.br",
@@ -72,9 +72,6 @@ export function LoginSignupForm() {
       <div className="form-box login">
         <form onSubmit={handleLogin}>
           <div className="brand">
-            <div className="brand-icon">
-              <Car className="h-5 w-5" />
-            </div>
             <h1>{COPY.loginTitle}</h1>
           </div>
           <div className="input-box">
@@ -115,7 +112,7 @@ export function LoginSignupForm() {
       {/* TOGGLE BOX */}
       <div className="toggle-box">
         <div className="toggle-panel toggle-left">
-          <h1>{COPY.toggleLoginPanelTitle}</h1>
+          <h1>{COPY.productName}</h1>
           <p className="tagline">{COPY.tagline}</p>
           <p>{COPY.toggleLoginPanelText}</p>
           <p className="tagline">Acesso exclusivo para a equipe Alencar Motors, somente por convite.</p>

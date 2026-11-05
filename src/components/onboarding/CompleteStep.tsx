@@ -62,7 +62,7 @@ export function CompleteStep({ stepData, completedSteps, onComplete }: Onboardin
   return (
     <div className="space-y-6 py-4">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">CRM Automotivo configurado! 🎉</h2>
+        <h2 className="text-2xl font-bold">Alencar Motors CRM configurado! 🎉</h2>
         <p className="text-muted-foreground">
           {configuredCount}/{items.length} itens configurados. Aqui está o resumo:
         </p>

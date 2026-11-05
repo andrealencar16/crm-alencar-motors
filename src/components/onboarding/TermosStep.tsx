@@ -75,7 +75,7 @@ export function TermosStep({ orgId, setCanContinue, setStepData }: OnboardingSte
         <div>
           <h3 className="text-xl font-bold">Termos e privacidade</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Para usar o CRM Automotivo precisamos do seu aceite. Leia com calma.
+            Para usar o Alencar Motors CRM precisamos do seu aceite. Leia com calma.
           </p>
         </div>
       </div>

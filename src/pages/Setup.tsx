@@ -117,7 +117,7 @@ export default function Setup() {
         <div className="mx-auto flex max-w-4xl items-center justify-between">
           <div className="flex items-center gap-3">
             <Rocket className="h-5 w-5 text-primary" />
-            <span className="text-lg font-bold">CRM Automotivo Setup</span>
+            <span className="text-lg font-bold">Alencar Motors CRM Setup</span>
           </div>
           <span className="text-sm text-muted-foreground">
             Passo {currentStep + 1} de {TOTAL_STEPS}

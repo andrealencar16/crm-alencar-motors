@@ -696,7 +696,7 @@ function NotificationsTab({ orgId, userId }: { orgId: string | null; userId?: st
 
 // ── Appearance Tab ──
 function AppearanceTab() {
-  const { theme, setTheme, density, setDensity, accentColor, setAccentColor } = useTheme();
+  const { theme, setTheme, density, setDensity } = useTheme();
 
   const themes = [
     { value: "light" as const, label: "Claro", icon: Sun },
@@ -704,13 +704,7 @@ function AppearanceTab() {
     { value: "system" as const, label: "Sistema", icon: Monitor },
   ];
 
-  const accents = [
-    { value: "blue", label: "Azul", color: "hsl(221, 83%, 53%)" },
-    { value: "violet", label: "Violeta", color: "hsl(262, 83%, 58%)" },
-    { value: "emerald", label: "Esmeralda", color: "hsl(160, 84%, 39%)" },
-    { value: "orange", label: "Laranja", color: "hsl(25, 95%, 53%)" },
-    { value: "rose", label: "Rosa", color: "hsl(347, 77%, 50%)" },
-  ];
+
 
   const densities = [
     { value: "compact" as const, label: "Compacta", desc: "Menos espaçamento, mais dados visíveis" },
@@ -741,23 +735,7 @@ function AppearanceTab() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Cor de Destaque</CardTitle>
-          <CardDescription className="text-[10px]">Cor primária da interface</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            {accents.map((a) => (
-              <button key={a.value} onClick={() => setAccentColor(a.value)}
-                className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-colors ${accentColor === a.value ? "border-primary" : "border-border hover:bg-accent/50"}`}>
-                <div className="h-6 w-6 rounded-full" style={{ backgroundColor: a.color }} />
-                <span className="text-[9px]">{a.label}</span>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <p className="text-sm text-muted-foreground">Identidade visual fixa Alencar Motors CRM.</p>
 
       <Card>
         <CardHeader>

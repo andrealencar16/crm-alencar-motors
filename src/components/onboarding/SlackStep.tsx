@@ -146,7 +146,7 @@ export function SlackStep({ orgId, setCanContinue, setStepData }: OnboardingStep
             <p className="text-sm font-medium">Como funciona:</p>
             <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
               <li>Clique em "Conectar Slack" abaixo</li>
-              <li>O CRM Automotivo se conecta automaticamente ao seu workspace</li>
+              <li>O Alencar Motors CRM se conecta automaticamente ao seu workspace</li>
               <li>Escolha o canal para receber notificações</li>
               <li>Pronto! Você receberá alertas de vendas em tempo real</li>
             </ol>
