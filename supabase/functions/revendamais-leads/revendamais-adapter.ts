@@ -140,8 +140,7 @@ function boundedJson(raw: unknown): void {
 export function createRevendaMaisAdapter(config: RevendaMaisConfig): {
   map: LeadAdapter; inspect: (raw: unknown) => RevendaMaisEvent;
 } {
-  const dealer = identifier(config.authorizedDealerId);
-  if (!dealer) throw new Error("invalid_revendamais_configuration");
+  const dealer = requiredIdentifier(config.authorizedDealerId);
   const policy = config.customerInteraction ? {
     direction: config.customerInteraction.direction, typeIds: [...config.customerInteraction.typeIds],
   } : null;
