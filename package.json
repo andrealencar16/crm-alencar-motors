@@ -9,7 +9,9 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "npm run test:stock-keys && npm run test:ui",
+    "test:stock-keys": "node --test tests/stock-key-admin.test.ts",
+    "test:ui": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

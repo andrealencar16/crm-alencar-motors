@@ -64,6 +64,13 @@
       "when": 1793805847838,
       "tag": "0008_api_keys_scopes_and_stock_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793880000000,
+      "tag": "0009_stock_api_keys",
+      "breakpoints": true
     }
   ]
 }
