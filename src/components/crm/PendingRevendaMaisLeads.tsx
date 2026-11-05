@@ -11,6 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 
 const transport = supabase as unknown as ReviewTransport;
 const enabled = import.meta.env.VITE_REVENDAMAIS_REVIEW_ENABLED === "true";
+// Fase 1: somente visualização. A RPC approve_revendamais_lead permanece sem EXECUTE no
+// banco; o botão de aprovação só é habilitado por liberação explícita desta flag.
+const approvalEnabled = import.meta.env.VITE_REVENDAMAIS_APPROVAL_ENABLED === "true";
 const unavailable = "A integração de leads ainda não está disponível neste ambiente.";
 
 export function PendingRevendaMaisLeads({ onApproved }: { onApproved: () => Promise<void> }) {
@@ -61,7 +64,7 @@ function PendingReviewDrawer({ active, onApproved }: { active: boolean; onApprov
   }, [active, load]);
 
   const approve = async () => {
-    if (!active || missing || busy.current || !confirm || !selected || selected.approval_blocker || loading) return;
+    if (!approvalEnabled || !active || missing || busy.current || !confirm || !selected || selected.approval_blocker || loading) return;
     const receiptId = selected.receipt_id;
     busy.current = true; setSaving(true); setError(null);
     try {
@@ -149,7 +152,8 @@ function PendingReviewDrawer({ active, onApproved }: { active: boolean; onApprov
               {selected.source_created_at && <div><dt className="text-muted-foreground">Data original informada</dt><dd>{selected.source_created_at} (fuso não informado)</dd></div>}
             </dl>
             {selected.approval_blocker && <p role="status" className="text-sm text-destructive">{reviewConflictMessage[selected.approval_blocker]}</p>}
-            <Button className="w-full" disabled={saving || missing || !!selected.approval_blocker} onClick={() => setConfirm(true)}>
+            {!approvalEnabled && <p role="status" className="text-sm text-muted-foreground">A aprovação de leads será habilitada em uma próxima fase.</p>}
+            <Button className="w-full" disabled={!approvalEnabled || saving || missing || !!selected.approval_blocker} onClick={() => setConfirm(true)}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Aprovar e Criar Negócio
             </Button>
           </section>}
@@ -163,7 +167,7 @@ function PendingReviewDrawer({ active, onApproved }: { active: boolean; onApprov
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction disabled={saving || !active || missing} onClick={event => { event.preventDefault(); void approve(); }}>
+            <AlertDialogAction disabled={!approvalEnabled || saving || !active || missing} onClick={event => { event.preventDefault(); void approve(); }}>
               {saving ? "Aprovando…" : "Confirmar aprovação"}
             </AlertDialogAction>
           </AlertDialogFooter>
