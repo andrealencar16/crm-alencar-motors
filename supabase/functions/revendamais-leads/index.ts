@@ -2,13 +2,13 @@ import { createHandler } from "./handler.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.99.1";
 import { createReceiptPersistence } from "./persistence.ts";
 
-const identityConfirmed = Deno.env.get("REVENDAMAIS_EXTERNAL_ID_CONFIRMED") === "true";
+// Provider id changes on delivery retries. Legacy confirmation flag is NOT read.
 const retentionApproved = Deno.env.get("REVENDAMAIS_UNKNOWN_TEXT_RETENTION_APPROVED") === "true";
 
 Deno.serve(createHandler({
   secret: Deno.env.get("REVENDAMAIS_WEBHOOK_SECRET"),
   dealerId: Deno.env.get("REVENDAMAIS_DEALER_ID"),
-  externalIdIsStable: identityConfirmed,
+  externalIdIsStable: false,
   unknownTextRetentionApproved: retentionApproved,
   persistenceFactory: Deno.env.get("REVENDAMAIS_INGESTION_ENABLED") === "true" ? (signal) => {
     const url = Deno.env.get("SUPABASE_URL");
@@ -18,6 +18,6 @@ Deno.serve(createHandler({
     return createReceiptPersistence(async (name, args) => {
       const { data, error } = await client.rpc(name, args).abortSignal(signal);
       return { data, error };
-    }, { externalIdentityConfirmed: identityConfirmed, unknownTextRetentionApproved: retentionApproved });
+    }, { externalIdentityConfirmed: false, unknownTextRetentionApproved: retentionApproved });
   } : undefined,
 }));

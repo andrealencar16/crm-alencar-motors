@@ -15,14 +15,15 @@ test("one RPC only, explicit field allowlist, trusted identity defaults off", as
     const rpc: ReceiptRpc = async (name, args) => {
       calls++;
       assert.equal(name, "revendamais_commit_lead");
-      assert.equal(args.p_identity_confirmed, confirmed);
+      assert.equal(args.p_identity_confirmed, false);
+      assert.equal(args.p_lead.externalId, null);
       assert.deepEqual(Object.keys(args.p_lead).sort(), ["name","phone","email","title","firstMessage","portal","externalId"].sort());
       assert.equal(JSON.stringify(args).includes("forged"), false);
-      return { data: { status: "created", contactId: id, dealId: id, ignored: "secret" }, error: null };
+      return { data: { status: "review", receiptId: id, ignored: "secret" }, error: null };
     };
     const store = createReceiptPersistence(rpc, confirmed ? { externalIdentityConfirmed: true } : undefined);
     const forged = { ...command, lead: { ...command.lead, org_id: "forged" } };
-    assert.deepEqual(await store.commit(forged), { status: "created", contactId: id, dealId: id });
+    assert.deepEqual(await store.commit(forged), { status: "review", receiptId: id });
     assert.equal(calls, 1);
   }
 });
@@ -40,11 +41,11 @@ test("RPC failures and malformed replies expose only sanitized error and permit 
   const store = createReceiptPersistence(async () => {
     calls++;
     if (calls === 1) throw new Error("private-data");
-    return { data: { status: "duplicate", contactId: id, dealId: id }, error: null };
+    return { data: { status: "review", receiptId: id }, error: null };
   });
   await assert.rejects(store.commit(command), { message: "lead_persistence_failed" });
-  assert.equal((await store.commit(command)).status, "duplicate");
-  for (const reply of [null, {}, { status: "created", contactId: "bad", dealId: id }]) {
+  assert.equal((await store.commit(command)).status, "review");
+  for (const reply of [null, {}, { status: "created", contactId: id, dealId: id }, { status: "duplicate", contactId: id, dealId: id }]) {
     await assert.rejects(createReceiptPersistence(async () => ({ data: reply, error: null })).commit(command), { message: "lead_persistence_failed" });
   }
   await assert.rejects(createReceiptPersistence(async () => ({ data: null, error: { message: "private-data" } })).commit(command), { message: "lead_persistence_failed" });

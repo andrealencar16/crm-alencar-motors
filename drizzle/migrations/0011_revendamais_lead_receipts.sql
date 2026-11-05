@@ -1,5 +1,5 @@
 -- PREPARED ONLY. Verify actual CRM schema/triggers before applying.
--- No provider ID uniqueness constraint: identity semantics remain unconfirmed.
+-- Provider root id identifies an ATTEMPT, changing on retry; never a business key.
 DO $$ BEGIN
   IF to_regprocedure('extensions.digest(bytea,text)') IS NULL THEN
     RAISE EXCEPTION 'pgcrypto prerequisite missing';
@@ -24,15 +24,25 @@ CREATE TABLE public.revendamais_lead_receipts (
   unknown_text_present boolean NOT NULL DEFAULT false,
   unknown_text_disposition text NOT NULL DEFAULT 'absent'
     CHECK (unknown_text_disposition IN ('absent','omitted_policy','retained','expired')),
-  external_id text CHECK (char_length(external_id) <= 200),
-  identity_confirmed boolean NOT NULL,
+  external_id text CHECK (external_id IS NULL), -- Reserved; no stable lead ID confirmed.
+  delivery_attempt_id text CHECK (delivery_attempt_id ~ '^[1-9][0-9]{0,39}$'),
+  source_lead_id_hint text CHECK (source_lead_id_hint ~ '^[1-9][0-9]{0,39}$'),
+  dealer_id text CHECK (dealer_id ~ '^[1-9][0-9]{0,39}$'),
+  interaction_lead_ids jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(interaction_lead_ids)='array' AND jsonb_array_length(interaction_lead_ids)<=50),
+  retry_lead_id text CHECK (retry_lead_id ~ '^[1-9][0-9]{0,39}$'),
+  retry_identity_status text NOT NULL DEFAULT 'empty'
+    CHECK (retry_identity_status IN ('consistent','empty','incomplete','ambiguous','unscoped')),
+  retry_relation text NOT NULL DEFAULT 'none' CHECK (retry_relation IN ('none','automatic_resend','content_conflict')),
+  possible_related_receipt_id uuid REFERENCES public.revendamais_lead_receipts(id) ON DELETE SET NULL,
+  identity_confirmed boolean NOT NULL CHECK (NOT identity_confirmed),
   status text NOT NULL CHECK (status IN ('processed', 'review')),
   contact_id uuid REFERENCES public.contacts(id) ON DELETE SET NULL,
   deal_id uuid REFERENCES public.deals(id) ON DELETE SET NULL,
   received_at timestamptz NOT NULL DEFAULT now(),
   processed_at timestamptz,
-  reason text CHECK (reason IN ('untrusted_identity','insufficient_contact','ambiguous_contact','identity_conflict','linked_records_missing')),
-  -- Restricted digest detects divergent reuse of a trusted ID; never logged/exposed.
+  reason text CHECK (reason IN ('untrusted_identity','insufficient_contact','ambiguous_contact','identity_conflict','linked_records_missing','commercial_match_ambiguous','retry_identity_review','automatic_retry_review','retry_payload_conflict')),
+  -- Comparison of authorized commercial data only: excludes attempt/hint IDs.
+  -- Equality is a review signal, NOT proof that two deliveries are one interest.
   content_digest bytea NOT NULL,
   -- Only review retains normalized fields for recovery, never the raw HTTP body.
   review_lead jsonb,
@@ -40,6 +50,10 @@ CREATE TABLE public.revendamais_lead_receipts (
   CHECK ((status = 'processed' AND processed_at IS NOT NULL AND reason IS NULL AND review_lead IS NULL AND review_expires_at IS NULL)
       OR (status = 'review' AND processed_at IS NULL AND reason IS NOT NULL AND review_lead IS NOT NULL AND review_expires_at IS NOT NULL)),
   CHECK (NOT identity_confirmed OR external_id IS NOT NULL),
+  CHECK ((retry_identity_status='consistent' AND dealer_id IS NOT NULL AND retry_lead_id IS NOT NULL)
+    OR (retry_identity_status<>'consistent' AND retry_lead_id IS NULL)),
+  CHECK (retry_relation='none' OR retry_identity_status='consistent'),
+  CHECK (possible_related_receipt_id IS NULL OR retry_relation='automatic_resend'),
   CHECK ((NOT unknown_text_present AND unknown_text_disposition='absent' AND unknown_interaction_text IS NULL)
     OR (unknown_text_present AND unknown_text_disposition IN ('omitted_policy','expired') AND unknown_interaction_text IS NULL)
     OR (unknown_text_present AND unknown_text_disposition='retained' AND unknown_interaction_text IS NOT NULL)),
@@ -48,8 +62,11 @@ CREATE TABLE public.revendamais_lead_receipts (
     OR (unknown_interaction_text IS NOT NULL AND unknown_interaction_authorship IS NOT NULL
     AND unknown_interaction_index IS NOT NULL AND unknown_text_expires_at IS NOT NULL))
 );
-CREATE INDEX revendamais_receipts_identity_idx ON public.revendamais_lead_receipts(org_id, external_id)
-  WHERE external_id IS NOT NULL;
+CREATE INDEX revendamais_receipts_attempt_idx ON public.revendamais_lead_receipts(org_id, delivery_attempt_id)
+  WHERE delivery_attempt_id IS NOT NULL;
+CREATE INDEX revendamais_receipts_comparison_idx ON public.revendamais_lead_receipts(org_id, content_digest);
+CREATE INDEX revendamais_receipts_retry_scope_idx ON public.revendamais_lead_receipts(org_id,dealer_id,retry_lead_id)
+  WHERE retry_identity_status='consistent';
 CREATE INDEX revendamais_receipts_review_idx ON public.revendamais_lead_receipts(review_expires_at)
   WHERE status = 'review';
 CREATE INDEX revendamais_receipts_unknown_expiry_idx ON public.revendamais_lead_receipts(unknown_text_expires_at)
@@ -88,11 +105,16 @@ DECLARE
   v_channel_id text; v_channel_name text; v_source_date text;
   v_unknown text; v_unknown_date text; v_unknown_index integer; v_meta jsonb;
   v_unknown_present boolean; v_disposition text;
-  v_prior public.revendamais_lead_receipts%ROWTYPE;
+  v_attempt text; v_hint text; v_related uuid;
+  v_dealer text; v_ids jsonb; v_retry_id text; v_retry_status text; v_relation text := 'none';
+  v_missing integer; v_distinct integer; v_prior_id uuid;
   v_candidate public.contacts%ROWTYPE;
 BEGIN
   IF auth.role() IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  IF p_identity_confirmed THEN
+    RAISE EXCEPTION 'unstable_delivery_identity' USING ERRCODE = '22023';
   END IF;
   -- Explicit allowlist; even privileged callers cannot assign CRM IDs or roles.
   IF p_lead IS NULL OR jsonb_typeof(p_lead) <> 'object' OR p_identity_confirmed IS NULL
@@ -109,8 +131,9 @@ BEGIN
     RAISE EXCEPTION 'invalid_metadata' USING ERRCODE = '22023';
   END IF;
   IF EXISTS (SELECT 1 FROM jsonb_each(p_metadata) AS e(k,v)
-    WHERE k NOT IN ('channelId','channelName','createdAt','unknownInteraction','unknownTextPresent')
-    OR (k NOT IN ('unknownInteraction','unknownTextPresent') AND jsonb_typeof(v) NOT IN ('string','null'))
+    WHERE k NOT IN ('channelId','channelName','createdAt','unknownInteraction','unknownTextPresent','deliveryAttemptId','sourceLeadIdHint','dealerId','interactionLeadIds')
+    OR (k NOT IN ('unknownInteraction','unknownTextPresent','interactionLeadIds') AND jsonb_typeof(v) NOT IN ('string','null'))
+    OR (k = 'interactionLeadIds' AND jsonb_typeof(v) NOT IN ('array','null'))
     OR (k = 'unknownTextPresent' AND jsonb_typeof(v) NOT IN ('boolean','null'))
     OR (k = 'unknownInteraction' AND jsonb_typeof(v) NOT IN ('object','null'))) THEN
     RAISE EXCEPTION 'invalid_metadata' USING ERRCODE = '22023';
@@ -118,7 +141,26 @@ BEGIN
   v_channel_id := p_metadata->>'channelId';
   v_channel_name := p_metadata->>'channelName';
   v_source_date := p_metadata->>'createdAt';
+  v_attempt := p_metadata->>'deliveryAttemptId'; v_hint := p_metadata->>'sourceLeadIdHint';
+  v_dealer := p_metadata->>'dealerId';
+  v_ids := coalesce(nullif(p_metadata->'interactionLeadIds','null'::jsonb),'[]'::jsonb);
+  IF (v_dealer IS NOT NULL AND v_dealer !~ '^[1-9][0-9]{0,39}$') OR jsonb_array_length(v_ids)>50
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_ids) AS e(v)
+      WHERE jsonb_typeof(v) NOT IN ('string','null')
+        OR (jsonb_typeof(v)='string' AND (v#>>'{}') !~ '^[1-9][0-9]{0,39}$')) THEN
+    RAISE EXCEPTION 'invalid_metadata' USING ERRCODE='22023';
+  END IF;
+  SELECT count(*) FILTER (WHERE jsonb_typeof(v)='null'),
+    count(DISTINCT(v#>>'{}')) FILTER (WHERE jsonb_typeof(v)='string'),
+    min(v#>>'{}') FILTER (WHERE jsonb_typeof(v)='string')
+    INTO v_missing,v_distinct,v_retry_id FROM jsonb_array_elements(v_ids) AS e(v);
+  v_retry_status := CASE WHEN jsonb_array_length(v_ids)=0 THEN 'empty'
+    WHEN v_distinct>1 THEN 'ambiguous' WHEN v_missing>0 THEN 'incomplete'
+    WHEN v_dealer IS NULL THEN 'unscoped' ELSE 'consistent' END;
+  IF v_retry_status<>'consistent' THEN v_retry_id := NULL; END IF;
   IF (v_channel_id IS NOT NULL AND v_channel_id !~ '^[1-9][0-9]{0,39}$')
+    OR (v_attempt IS NOT NULL AND v_attempt !~ '^[1-9][0-9]{0,39}$')
+    OR (v_hint IS NOT NULL AND v_hint !~ '^[1-9][0-9]{0,39}$')
     OR char_length(v_channel_name) > 100 OR NOT public.revendamais_local_date_valid(v_source_date) THEN
     RAISE EXCEPTION 'invalid_metadata' USING ERRCODE = '22023';
   END IF;
@@ -144,8 +186,6 @@ BEGIN
   END IF;
   v_disposition := CASE WHEN v_unknown IS NOT NULL THEN 'retained'
     WHEN v_unknown_present THEN 'omitted_policy' ELSE 'absent' END;
-  v_meta := jsonb_build_object('channelId',v_channel_id,'channelName',v_channel_name,'createdAt',v_source_date,
-    'unknownText',v_unknown,'unknownCreatedAt',v_unknown_date,'unknownIndex',v_unknown_index,'unknownTextPresent',v_unknown_present);
   v_name := nullif(btrim(p_lead->>'name'), '');
   v_phone := nullif(btrim(p_lead->>'phone'), '');
   v_email := nullif(btrim(p_lead->>'email'), '');
@@ -153,6 +193,7 @@ BEGIN
   v_message := nullif(btrim(p_lead->>'firstMessage'), '');
   v_portal := nullif(btrim(p_lead->>'portal'), '');
   v_external := nullif(btrim(p_lead->>'externalId'), '');
+  IF v_external IS NOT NULL THEN RAISE EXCEPTION 'no_stable_external_id' USING ERRCODE = '22023'; END IF;
   IF v_title IS NULL OR char_length(v_title) > 300 OR char_length(v_name) > 200
     OR char_length(v_message) > 10000 OR char_length(v_portal) > 100 OR char_length(v_external) > 200
     OR char_length(v_email) > 254 OR (v_email IS NOT NULL AND (v_email <> lower(v_email) OR v_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'))
@@ -167,30 +208,35 @@ BEGIN
   END IF;
   -- Single-org serialization includes absent-ID and conflicting-ID decisions.
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('revendamais:' || v_org::text, 0));
-  v_digest := extensions.digest(convert_to(jsonb_build_object('name',v_name,'phone',v_phone,'email',v_email,
-    'title',v_title,'firstMessage',v_message,'portal',v_portal,'externalId',v_external,'metadata',v_meta)::text,'UTF8'), 'sha256');
-  IF p_identity_confirmed THEN
-    SELECT * INTO v_prior FROM public.revendamais_lead_receipts
-      -- Also respect reviews received before identity was confirmed: flipping a
-      -- flag must not silently promote pending reviews into new CRM records.
-      WHERE org_id = v_org AND external_id = v_external
-      ORDER BY (content_digest = v_digest) DESC,
-        (status = 'processed' AND contact_id IS NOT NULL AND deal_id IS NOT NULL) DESC,
-        (status = 'review') DESC, received_at, id LIMIT 1 FOR UPDATE;
+  -- Commercial comparison excludes attempt IDs, unconfirmed lead hints, ALL
+  -- timestamps and source-array positions. Equality only suggests human review.
+  v_digest := extensions.digest(convert_to(jsonb_build_object('name',lower(v_name),'phone',v_phone,'email',v_email,
+    'title',lower(v_title),'firstMessage',v_message,'portal',v_portal,
+    'channelId',v_channel_id,'channelName',lower(v_channel_name),
+    'unknownText',v_unknown,'unknownTextPresent',v_unknown_present)::text,'UTF8'), 'sha256');
+  -- Confirmed retry scope: integrator (fixed), authorized dealer and unanimous
+  -- interations[].lead_id. No commercial-only fallback for missing/ambiguous IDs.
+  IF v_retry_status='consistent' THEN
+    SELECT id INTO v_prior_id FROM public.revendamais_lead_receipts
+      WHERE org_id=v_org AND dealer_id=v_dealer AND retry_lead_id=v_retry_id AND retry_identity_status='consistent'
+      ORDER BY received_at,id LIMIT 1 FOR KEY SHARE;
     IF FOUND THEN
-      IF v_prior.content_digest IS DISTINCT FROM v_digest THEN
-        v_reason := 'identity_conflict';
-      ELSIF v_prior.status = 'processed' AND v_prior.contact_id IS NOT NULL AND v_prior.deal_id IS NOT NULL THEN
-        RETURN jsonb_build_object('status','duplicate','contactId',v_prior.contact_id,'dealId',v_prior.deal_id);
-      ELSIF v_prior.status = 'processed' THEN
-        v_reason := 'linked_records_missing';
+      IF EXISTS (SELECT 1 FROM public.revendamais_lead_receipts
+        WHERE org_id=v_org AND dealer_id=v_dealer AND retry_lead_id=v_retry_id AND retry_identity_status='consistent'
+          AND content_digest<>v_digest) THEN
+        v_relation := 'content_conflict'; v_reason := 'retry_payload_conflict';
       ELSE
-        RETURN jsonb_build_object('status','review','receiptId',v_prior.id);
+        v_related := v_prior_id; v_relation := 'automatic_resend'; v_reason := 'automatic_retry_review';
       END IF;
-    END IF;
-  ELSE
-    v_reason := 'untrusted_identity';
+    ELSE v_reason := 'retry_identity_review'; END IF;
+  ELSE v_reason := 'untrusted_identity'; END IF;
+  -- No retry intervals are known. No time window or four-attempt cutoff is used.
+  -- Every delivery gets its OWN durable receipt, even a byte-identical replay.
+  IF v_relation<>'content_conflict' AND (v_name IS NULL OR (v_phone IS NULL AND v_email IS NULL)) THEN
+    v_reason := 'insufficient_contact';
   END IF;
+  -- The atomic CRM-writing block below is retained, but intentionally unreachable
+  -- until a NEW, proven stable identity/review-approval contract is implemented.
   IF v_reason IS NULL THEN
     IF v_phone IS NULL AND v_email IS NULL THEN
       v_reason := 'insufficient_contact';
@@ -222,12 +268,14 @@ BEGIN
       status, reason, content_digest, review_lead, review_expires_at,
       channel_external_id,channel_name,source_created_at,unknown_interaction_text,
       unknown_interaction_authorship,unknown_interaction_index,unknown_interaction_created_at,unknown_text_expires_at,
-      unknown_text_present,unknown_text_disposition)
+      unknown_text_present,unknown_text_disposition,delivery_attempt_id,source_lead_id_hint,possible_related_receipt_id,
+      dealer_id,interaction_lead_ids,retry_lead_id,retry_identity_status,retry_relation)
     VALUES(v_org,v_portal,v_external,p_identity_confirmed,'review',v_reason,v_digest,
       jsonb_build_object('name',v_name,'phone',v_phone,'email',v_email,'title',v_title,'firstMessage',v_message),
       now() + interval '30 days',v_channel_id,v_channel_name,v_source_date,v_unknown,
       CASE WHEN v_unknown IS NOT NULL THEN 'unknown' END,v_unknown_index,v_unknown_date,
-      CASE WHEN v_unknown IS NOT NULL THEN now() + interval '30 days' END,v_unknown_present,v_disposition) RETURNING id INTO v_receipt;
+      CASE WHEN v_unknown IS NOT NULL THEN now() + interval '30 days' END,v_unknown_present,v_disposition,
+      v_attempt,v_hint,v_related,v_dealer,v_ids,v_retry_id,v_retry_status,v_relation) RETURNING id INTO v_receipt;
     RETURN jsonb_build_object('status','review','receiptId',v_receipt);
   END IF;
   IF v_contact IS NULL THEN

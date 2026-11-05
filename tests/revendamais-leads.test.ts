@@ -12,7 +12,7 @@ const payload = (extra: Record<string, unknown> = {}) => ({ dealer_id: Number(de
 const req = (value: unknown = payload(), target = url) => new Request(target, { method: "POST",
   headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
 const factory = (rpc: ReceiptRpc, confirmed = false) => () => createReceiptPersistence(rpc, { externalIdentityConfirmed: confirmed });
-const success: ReceiptRpc = async () => ({ data: { status: "created", contactId: id, dealId: id }, error: null });
+const success: ReceiptRpc = async () => ({ data: { status: "review", receiptId: id }, error: null });
 const handler = (extra: Partial<Parameters<typeof createHandler>[0]> = {}) => createHandler({
   secret, dealerId: dealer, persistenceFactory: factory(success), ...extra,
 });
@@ -37,14 +37,14 @@ test("other dealer denied before persistence; official dealer accepted", async (
   const h = handler({ persistenceFactory: factory(async (name, args) => { calls++; return success(name,args); }) });
   for (const value of [1136, "900003", null]) assert.equal((await h(req(payload({ dealer_id: value })))).status, 403);
   assert.equal(calls, 0);
-  assert.equal((await h(req())).status, 201);
+  assert.equal((await h(req())).status, 202);
   assert.equal(calls, 1);
 });
 
-test("durable created, duplicate and review map to explicit 2xx without internal IDs", async () => {
+test("review is acknowledged; stale automatic creation/duplicate responses fail closed", async () => {
   for (const [status, code, data] of [
-    [201, "created", { status: "created", contactId: id, dealId: id }],
-    [200, "duplicate", { status: "duplicate", contactId: id, dealId: id }],
+    [503, "persistence_unavailable", { status: "created", contactId: id, dealId: id }],
+    [503, "persistence_unavailable", { status: "duplicate", contactId: id, dealId: id }],
     [202, "review_persisted", { status: "review", receiptId: id }],
   ] as const) {
     const res = await handler({ persistenceFactory: factory(async () => ({ data, error: null })) })(req());
@@ -63,20 +63,21 @@ test("no response before durable confirmation, even after RPC invocation", async
   const response = handler({ persistenceFactory: factory(async () => { entered(); return pending; }) })(req()).then(r => { responded = true; return r; });
   await started;
   assert.equal(responded, false);
-  release({ data: { status: "created", contactId: id, dealId: id }, error: null });
-  assert.equal((await response).status, 201);
+  release({ data: { status: "review", receiptId: id }, error: null });
+  assert.equal((await response).status, 202);
 });
 
-test("same event, new interest and divergent event delegate identity to one transactional RPC (mock)", async () => {
+test("attempt ID cannot confirm business identity, including obsolete true flags", async () => {
   let calls = 0;
   const h = handler({ externalIdIsStable: true, persistenceFactory: factory(async (_, args) => {
-    assert.equal(args.p_identity_confirmed, true);
-    assert.equal(args.p_lead.externalId, "dealer:9325:lead:100001");
-    const status = calls++ === 0 ? "created" : args.p_lead.title === "Divergent" ? "review" : "duplicate";
-    return { data: status === "review" ? { status, receiptId: id } : { status, contactId: id, dealId: id }, error: null };
+    assert.equal(args.p_identity_confirmed, false);
+    assert.equal(args.p_lead.externalId, null);
+    assert.equal(args.p_metadata.deliveryAttemptId, "100001");
+    calls++;
+    return { data: { status: "review", receiptId: id }, error: null };
   }, true) });
-  assert.equal((await h(req())).status, 201);
-  assert.equal((await h(req())).status, 200);
+  assert.equal((await h(req())).status, 202);
+  assert.equal((await h(req())).status, 202);
   assert.equal((await h(req(payload({ title: "Divergent" })))).status, 202);
   assert.equal(calls, 3);
 });

@@ -1,5 +1,10 @@
 /** Receipt-only metadata. Unknown authorship is never a customer message. */
 export type LeadMetadata = Readonly<{
+  deliveryAttemptId?: string | null;
+  dealerId?: string | null;
+  interactionLeadIds?: readonly (string | null)[];
+  // Legacy diagnostic hint only. Never used alone for association.
+  sourceLeadIdHint?: string | null;
   channelId: string | null;
   channelName: string | null;
   createdAt: string | null;

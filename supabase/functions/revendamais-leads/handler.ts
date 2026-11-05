@@ -21,6 +21,7 @@ export function createHandler(deps: {
   secret?: string;
   dealerId?: string;
   persistenceFactory?: (signal: AbortSignal) => LeadPersistence;
+  /** @deprecated Ignored: provider id is an unstable delivery-attempt ID. */
   externalIdIsStable?: boolean;
   unknownTextRetentionApproved?: boolean;
   persistenceTimeoutMs?: number;
@@ -80,6 +81,10 @@ export function createHandler(deps: {
       // channel_name can be a campaign/manual channel; do not label it as a portal.
       const process = createLeadProcessor({ adapter: () => ({ ...event.fields, portal: null }),
         metadata: {
+          deliveryAttemptId: event.metadata.deliveryAttemptId,
+          dealerId: event.metadata.dealerId,
+          interactionLeadIds: event.metadata.interactions.map(i => i.leadId),
+          sourceLeadIdHint: event.metadata.sourceLeadIdHint,
           channelId: event.metadata.channelId,
           channelName: typeof event.fields.portal === "string" ? event.fields.portal : null,
           createdAt: event.metadata.createdAt,

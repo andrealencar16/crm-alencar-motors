@@ -26,25 +26,7 @@ class MemoryPersistence implements LeadPersistence {
       this.reviews.push(lead);
       return { status: "review", receiptId: `review-${this.reviews.length}` };
     }
-    const key = `${command.provider}:${lead.externalId}`;
-    const previous = this.receipts.get(key);
-    if (previous && previous.status === "created") return { ...previous, status: "duplicate" };
-    const candidates = this.contacts.filter(({ lead: c }) =>
-      (lead.phone && lead.phone === c.phone) || (lead.email && lead.email === c.email));
-    if (candidates.length > 1 || (!lead.phone && !lead.email) || !lead.name) {
-      this.reviews.push(lead);
-      return { status: "review", receiptId: `review-${this.reviews.length}` };
-    }
-    let contact = candidates[0];
-    if (!contact) {
-      contact = { id: `contact-${this.contacts.length + 1}`, lead };
-      this.contacts.push(contact);
-    }
-    const deal = { id: `deal-${this.deals.length + 1}`, contactId: contact.id, lead };
-    this.deals.push(deal);
-    const result: CommitResult = { status: "created", contactId: contact.id, dealId: deal.id };
-    this.receipts.set(key, result);
-    return result;
+    assert.fail("Unstable provider identity must always select review");
   }
 }
 const setup = (externalIdIsStable = true) => {
@@ -52,22 +34,23 @@ const setup = (externalIdIsStable = true) => {
   return { persistence, process: createLeadProcessor({ adapter, persistence, externalIdIsStable }) };
 };
 
-test("new contact and deal preserve title and first message without vehicle", async () => {
+test("complete lead is reviewed with title/message preserved, without automatic CRM writes", async () => {
   const { persistence, process } = setup();
-  assert.equal((await process(payload())).status, "created");
-  assert.equal(persistence.contacts.length, 1);
-  assert.equal(persistence.deals[0].contactId, persistence.contacts[0].id);
-  assert.equal(persistence.deals[0].lead.firstMessage, "Olá, teste fictício");
-  assert.equal(persistence.deals[0].lead.title, "Interesse fictício A");
+  assert.equal((await process(payload())).status, "review");
+  assert.equal(persistence.contacts.length, 0);
+  assert.equal(persistence.deals.length, 0);
+  assert.equal(persistence.reviews[0].firstMessage, "Olá, teste fictício");
+  assert.equal(persistence.reviews[0].title, "Interesse fictício A");
 });
 
-test("existing contact receives a new commercial interest, duplicate event does not", async () => {
+test("different attempt IDs and another commercial interest all preserve separate reviews", async () => {
   const { persistence, process } = setup();
   await process(payload());
-  assert.equal((await process(payload())).status, "duplicate");
-  assert.equal((await process(payload({ externalId: "fixture-2", title: "Interesse B" }))).status, "created");
-  assert.equal(persistence.contacts.length, 1);
-  assert.equal(persistence.deals.length, 2);
+  assert.equal((await process(payload())).status, "review");
+  assert.equal((await process(payload({ externalId: "fixture-2", title: "Interesse B" }))).status, "review");
+  assert.equal(persistence.contacts.length, 0);
+  assert.equal(persistence.deals.length, 0);
+  assert.equal(persistence.reviews.length, 3);
 });
 
 test("missing identifiers, ambiguous identity and missing name are reviewed without invented contact", async () => {
@@ -81,7 +64,8 @@ test("missing identifiers, ambiguous identity and missing name are reviewed with
   await process(payload());
   await process(payload({ externalId: "fixture-2", email: "other@example.invalid", phone: "85988880000" }));
   assert.equal((await process(payload({ externalId: "fixture-3", email: "other@example.invalid" }))).status, "review");
-  assert.equal(persistence.deals.length, 2);
+  assert.equal(persistence.deals.length, 0);
+  assert.equal(persistence.reviews.length, 3);
 });
 
 test("unknown origin, missing email, empty message and incomplete name", () => {
@@ -128,16 +112,17 @@ test("missing or unconfirmed external ID goes to review; identical interests are
   }
 });
 
-test("persistence failure is retryable and resubmission succeeds exactly once", async () => {
+test("persistence failure is retryable and every successful resubmission is reviewed", async () => {
   const { persistence, process } = setup();
   persistence.fail = true;
   assert.deepEqual(await process(payload()), { status: "retry" });
   assert.equal(persistence.deals.length, 0);
   assert.equal(persistence.receipts.size, 0);
   persistence.fail = false;
-  assert.equal((await process(payload())).status, "created");
-  assert.equal((await process(payload())).status, "duplicate");
-  assert.equal(persistence.deals.length, 1);
+  assert.equal((await process(payload())).status, "review");
+  assert.equal((await process(payload())).status, "review");
+  assert.equal(persistence.deals.length, 0);
+  assert.equal(persistence.reviews.length, 2);
 });
 
 test("privileged payload fields and arbitrary persistence output are not forwarded", async () => {

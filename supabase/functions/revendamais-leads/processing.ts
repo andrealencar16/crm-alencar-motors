@@ -27,7 +27,7 @@ export function createLeadProcessor(deps: {
   adapter: LeadAdapter;
   persistence: LeadPersistence;
   metadata?: LeadMetadata;
-  // Trusted server policy; only true once uniqueness/stability of lead ID is confirmed.
+  // Deprecated and ignored. No stable Revenda Mais lead identifier is confirmed.
   externalIdIsStable: boolean;
 }) {
   return async (raw: unknown): Promise<ProcessingResult> => {
@@ -36,9 +36,9 @@ export function createLeadProcessor(deps: {
     try {
       const result = await deps.persistence.commit({
         provider: "revendamais",
-        lead: normalized.lead,
+        lead: Object.freeze({ ...normalized.lead, externalId: null }),
         metadata: deps.metadata,
-        identity: deps.externalIdIsStable && normalized.lead.externalId ? "confirmed_external_id" : "manual_review",
+        identity: "manual_review",
       });
       if (result?.status === "review" && typeof result.receiptId === "string" && result.receiptId) return { status: "review", receiptId: result.receiptId };
       if ((result?.status === "created" || result?.status === "duplicate") &&

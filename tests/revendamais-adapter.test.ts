@@ -32,11 +32,12 @@ test("complete payload maps confirmed keys and preserves source metadata", () =>
   assert.equal(result.lead.name, "Pessoa Fictícia");
   assert.equal(result.lead.portal, "Canal fictício");
   assert.equal(result.lead.email, null);
-  assert.equal(result.lead.externalId, `dealer:${dealer}:lead:100001`);
+  assert.equal(result.lead.externalId, null);
   assert.equal(result.lead.firstMessage, null);
   assert.equal(event.metadata.messageSelection, "unconfirmed_sender");
   assert.equal(event.metadata.channelId, "900002");
-  assert.equal(event.metadata.leadId, "100001");
+  assert.equal(event.metadata.deliveryAttemptId, "100001");
+  assert.equal(event.metadata.sourceLeadIdHint, "100001");
   assert.equal(event.metadata.createdAt, "2026-09-17 08:49:53");
   assert.equal(event.metadata.timezone, "unspecified");
   assert.equal(event.metadata.interactions[0].text, "Mensagem fictícia");
@@ -73,6 +74,14 @@ test("dealer identity is mandatory, exact, server-owned and has no sample defaul
   const fixed = createRevendaMaisAdapter(mutable);
   mutable.authorizedDealerId = "1136";
   assert.equal(normalizeLead(payload({ dealer_id: 1136 }), fixed.map).ok, false);
+});
+
+test("changing root delivery id does not invalidate interations.lead_id or turn that hint into identity", () => {
+  const r = adapter.inspect(payload({ id: "100002", interations: [interaction({ lead_id: 100001 })] }));
+  assert.equal(r.metadata.deliveryAttemptId, "100002");
+  assert.equal(r.metadata.sourceLeadIdHint, "100001");
+  assert.equal(r.fields.externalId, null);
+  assert.equal(r.fields.firstMessage, null);
 });
 
 test("HTML is reduced to text, with scripts/attributes/URLs never executed or copied", () => {
@@ -130,7 +139,7 @@ test("dealer contacts and unknown administrative fields are never mapped", () =>
 
 test("invalid known types, cross-lead interactions and invalid configuration fail closed", () => {
   for (const change of [{ client_name: {} }, { client_phone: 123 }, { title: [] }, { interations: {} },
-    { interations: [null] }, { interations: [interaction({ lead_id: 99999 })] },
+    { interations: [null] },
     { interations: [interaction({ direction: "1" })] }, { lead_channel_id: "bad" }]) {
     assert.equal(normalizeLead(payload(change), adapter.map).ok, false);
   }
@@ -155,12 +164,13 @@ test("size, structural depth, interaction count, HTML depth, cycles and accessor
   assert.equal(accessed, false);
 });
 
-test("logical identity scopes IDs by dealer and reuses existing persistence interface (mock)", async () => {
+test("root ID is delivery metadata only; another dealer never grants business identity", async () => {
   const other = createRevendaMaisAdapter({ authorizedDealerId: "900003" });
-  assert.notEqual(adapter.inspect(payload()).fields.externalId, other.inspect(payload({ dealer_id: 900003 })).fields.externalId);
+  assert.equal(adapter.inspect(payload()).fields.externalId, null);
+  assert.equal(other.inspect(payload({ dealer_id: 900003 })).fields.externalId, null);
   const persistence = createReceiptPersistence(async (name, args) => {
     assert.equal(name, "revendamais_commit_lead");
-    assert.equal(args.p_lead.externalId, `dealer:${dealer}:lead:100001`);
+    assert.equal(args.p_lead.externalId, null);
     assert.equal(args.p_identity_confirmed, false);
     return { data: { status: "review", receiptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, error: null };
   });

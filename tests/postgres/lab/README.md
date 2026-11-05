@@ -1,5 +1,15 @@
 # Laboratório Revenda Mais — PostgreSQL 17 descartável
 
+> Atualização 3.4.11: a versão local da 0011 agora reconhece retries por dealer e
+> array completo/unânime de interations[].lead_id. Recibos continuam distintos;
+> arrays vazios/divergentes não associam. Esta versão requer NOVO ciclo no laboratório
+> descartável, antes de Concurrency. Ver `docs/21-revendamais-retry-submission.md`.
+
+> Atualização 3.4.8: ID do fornecedor é de tentativa, não interesse. Fixtures agora
+> verificam revisão durável de cada entrega e relação comercial possível, sem
+> criação automática. Não esperar created+duplicate. Contrato atual descrito em
+> `docs/20-revendamais-delivery-idempotency.md` na raiz do repositório.
+
 PREPARADO, NÃO INICIALIZADO. Nenhum SQL foi executado na etapa 3.4.6.
 Não usar Lovable Cloud, Supabase operacional, URL do CRM nem dados reais.
 
@@ -96,15 +106,16 @@ interrompe a fase; não trocar URL/banco para fazer o teste passar.
 ```
 
 SqlTests executa a fixture existente via psql -X/ON_ERROR_STOP. Ela exige tabelas
-CRM vazias e termina em ROLLBACK. Valida criação/reuso de contato, negócio e nota,
-revisão, idempotência, metadados, retenção e falhas injetadas em cada escrita.
+CRM vazias e termina em ROLLBACK. Valida recibos por tentativa, comparação comercial
+sem descarte, metadados, omissão de texto sem autorização e falha de persistência.
 Os triggers de falha são da fixture e desaparecem no rollback. Isso não torna
 seguro executar a fixture na base operacional: triggers externos poderiam ter
 efeitos fora da transação. Aqui não existe acesso a dados/serviços reais.
 
 Concurrency exige o driver separado já instalado, usa duas sessões reais e faz
-COMMIT de fixtures: um evento simultâneo gera created + duplicate, e dois IDs
-novos do mesmo contato geram dois negócios sem duplicar contato. Deve ser o último
+COMMIT de fixtures: quatro tentativas simultâneas geram quatro revisões distintas
+e relação comercial possível; títulos diferentes do mesmo contato também são
+preservados, sem criar contatos/negócios automaticamente. Deve ser o último
 teste porque deixa as tabelas preenchidas. Para repetir, destruir/recriar lab.
 Harness exige opt-in, loopback, porta/usuário/senha/database exatos, sem query,
 sem fragmento, sem DNS ou PG* overrides; verifica container e marcador/version

@@ -6,7 +6,7 @@ export type Lead = Readonly<{
   title: string;
   firstMessage: string | null;
   portal: string | null;
-  externalId: string | null;
+  externalId: string | null; // Reserved for a stable commercial ID; current adapter returns null.
 }>;
 export type LeadField = "name" | "phone" | "email" | "title" | "firstMessage" | "portal" | "externalId";
 export type AdaptedLead = Partial<Record<LeadField, unknown>>;

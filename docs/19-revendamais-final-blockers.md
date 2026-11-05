@@ -1,5 +1,9 @@
 # Etapa 3.4.4 — decisões finais de ingestão local
 
+> Histórico superado na identidade: fornecedor confirmou que `id` muda em cada
+> tentativa. Política atual em `20-revendamais-delivery-idempotency.md`: nenhuma
+> promoção por flag, cada entrega recebe revisão e comparação só sugere relação.
+
 O banco conectado pelo Lovable é operacional. Não existe staging remoto separado.
 Nenhum SQL, teste PostgreSQL, migration, deploy, acesso remoto ou configuração de
 alerta foi executado nesta etapa. 0011 e Edge Function permanecem não publicadas.

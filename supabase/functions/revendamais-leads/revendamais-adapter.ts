@@ -1,4 +1,6 @@
 import type { AdaptedLead, LeadAdapter } from "./lead.ts";
+import { analyzeRetryLeadIds } from "./retry-identity.ts";
+import type { RetryIdentityStatus } from "./retry-identity.ts";
 
 /** Configuration is trusted server code, never derived from payload fields. */
 export type RevendaMaisConfig = {
@@ -13,11 +15,12 @@ export type Interaction = Readonly<{
 export type RevendaMaisEvent = {
   fields: AdaptedLead;
   metadata: {
-    dealerId: string; leadId: string | null; channelId: string | null;
+    dealerId: string; deliveryAttemptId: string | null; sourceLeadIdHint: string | null; channelId: string | null;
+    retryIdentityStatus: RetryIdentityStatus; retryLeadId: string | null;
     createdAt: string | null; timezone: "unspecified";
     interactions: readonly Interaction[];
     messageSelection: "unconfirmed_sender" | "none" | "ambiguous_order" | "selected";
-    identity: "available" | "missing_or_invalid";
+    attemptIdStatus: "available" | "missing_or_invalid";
   };
 };
 
@@ -143,7 +146,7 @@ export function createRevendaMaisAdapter(config: RevendaMaisConfig): {
     boundedJson(raw);
     const p = record(raw);
     if (identifier(p.dealer_id) !== dealer) throw new Error("revendamais_dealer_mismatch");
-    const leadId = identifier(p.id);
+    const attemptId = identifier(p.id);
     const channelId = identifier(p.lead_channel_id);
     if (p.lead_channel_id != null && channelId === null) invalid();
     if (p.interations != null && !Array.isArray(p.interations)) invalid();
@@ -151,16 +154,19 @@ export function createRevendaMaisAdapter(config: RevendaMaisConfig): {
     if (input.length > 50) invalid();
     const interactions = input.map(value => {
       const item = record(value), interactionLead = identifier(item.lead_id);
-      if (item.lead_id != null && (!interactionLead || (leadId && interactionLead !== leadId))) invalid();
+      // Root id is a DELIVERY attempt and may differ on every retry. Never compare
+      // it to interations[].lead_id as if it were a stable lead identifier.
+      // Missing/malformed IDs disable association, but do not discard the delivery.
       const html = str(item.html, 12000);
       return Object.freeze({ leadId: interactionLead, direction: enumNumber(item.direction),
         typeId: enumNumber(item.type_id), text: html ? htmlToPlainText(html) || null : null,
         createdAt: localDate(item.created_at) });
     });
+    const retryIdentity = analyzeRetryLeadIds(interactions.map(i => i.leadId));
     let selection: RevendaMaisEvent["metadata"]["messageSelection"] = policy ? "none" : "unconfirmed_sender";
     let firstMessage: string | null = null;
-    if (policy && leadId) {
-      const candidates = interactions.filter(i => i.leadId === leadId && i.direction === policy.direction && i.typeId !== null && policy.typeIds.includes(i.typeId) && i.text);
+    if (policy && retryIdentity.status === "consistent") {
+      const candidates = interactions.filter(i => i.leadId === retryIdentity.leadId && i.direction === policy.direction && i.typeId !== null && policy.typeIds.includes(i.typeId) && i.text);
       if (candidates.length) {
         if (candidates.some(i => !i.createdAt)) selection = "ambiguous_order";
         else {
@@ -174,11 +180,14 @@ export function createRevendaMaisAdapter(config: RevendaMaisConfig): {
     const channel = str(p.channel_name, 12000);
     return { fields: {
       name: str(p.client_name, 200), phone: str(p.client_phone, 40), email: null,
-      title: str(p.title, 300), firstMessage, portal: channel ? htmlToPlainText(channel) || null : null,
-      // Namespace encodes the requested logical identity; raw provider ID stays in metadata.
-      externalId: leadId ? `dealer:${dealer}:lead:${leadId}` : null,
-    }, metadata: { dealerId: dealer, leadId, channelId, createdAt: localDate(p.created_at), timezone: "unspecified",
-      interactions: Object.freeze(interactions), messageSelection: selection, identity: leadId ? "available" : "missing_or_invalid" } };
+      title: str(p.title, 300) ?? "Interesse recebido pelo Revenda Mais", firstMessage, portal: channel ? htmlToPlainText(channel) || null : null,
+      // No confirmed stable commercial identifier exists in the current contract.
+      externalId: null,
+    }, metadata: { dealerId: dealer, deliveryAttemptId: attemptId,
+      sourceLeadIdHint: interactions.find(i => i.leadId !== null)?.leadId ?? null,
+      retryIdentityStatus: retryIdentity.status, retryLeadId: retryIdentity.leadId,
+      channelId, createdAt: localDate(p.created_at), timezone: "unspecified",
+      interactions: Object.freeze(interactions), messageSelection: selection, attemptIdStatus: attemptId ? "available" : "missing_or_invalid" } };
   }
   return { inspect, map: (raw) => inspect(raw).fields };
 }
