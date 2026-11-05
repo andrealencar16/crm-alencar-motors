@@ -1,0 +1,1 @@
+DELETE FROM public.revendamais_lead_receipts WHERE id = '0626ff33-55a3-4def-b773-82d6b29cc947' AND review_lead->>'name' = 'Lead Teste Homologacao';

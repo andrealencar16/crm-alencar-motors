@@ -99,6 +99,13 @@
       "when": 1793912248410,
       "tag": "0013_revendamais_phase1_view_only",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793917452701,
+      "tag": "0014_remove_revendamais_test_receipt",
+      "breakpoints": true
     }
   ]
 }
