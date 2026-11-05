@@ -11,6 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 
 const transport = supabase as unknown as ReviewTransport;
 const enabled = import.meta.env.VITE_REVENDAMAIS_REVIEW_ENABLED === "true";
+// Fase 1: somente visualização. A RPC approve_revendamais_lead permanece sem EXECUTE no
+// banco; o botão de aprovação só é habilitado por liberação explícita desta flag.
+const approvalEnabled = import.meta.env.VITE_REVENDAMAIS_APPROVAL_ENABLED === "true";
 const unavailable = "A integração de leads ainda não está disponível neste ambiente.";
 
 export function PendingRevendaMaisLeads({ onApproved }: { onApproved: () => Promise<void> }) {
