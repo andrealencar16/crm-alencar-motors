@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Kanban, List, TrendingUp, Plus, Filter, Settings2, Trash2, GripVertical, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DealsKanban } from "@/components/crm/DealsKanban";
+import { PendingRevendaMaisLeads } from "@/components/crm/PendingRevendaMaisLeads";
 
 import { DealsList } from "@/components/crm/DealsList";
 import { DealsForecast } from "@/components/crm/DealsForecast";
@@ -324,6 +325,7 @@ export default function Deals() {
             <Plus className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Negócio</span>
           </Button>
+          <PendingRevendaMaisLeads onApproved={fetchData} />
         </div>
 
         <div className="flex items-center gap-2">
