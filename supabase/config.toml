@@ -3,3 +3,7 @@ project_id = "etoowzyrdoiqyjnnidyx"
 # stock-api validates opaque stock credentials itself; they are not Auth JWTs.
 [functions.stock-api]
 verify_jwt = false
+
+# External webhook: revendamais-leads authenticates its URL secret itself.
+[functions.revendamais-leads]
+verify_jwt = false

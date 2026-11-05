@@ -78,6 +78,13 @@
       "when": 1793890000000,
       "tag": "0010_stock_catalog_read",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793900000000,
+      "tag": "0011_revendamais_lead_receipts",
+      "breakpoints": true
     }
   ]
 }
