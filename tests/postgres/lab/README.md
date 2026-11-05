@@ -1,5 +1,11 @@
 # Laboratório Revenda Mais — PostgreSQL 17 descartável
 
+> Etapa 3.5.2: fases futuras ReviewSetup, ReviewMigrate, ReviewVerify,
+> ReviewTests e ReviewConcurrency preparam a homologação da 0012.
+> Nenhuma foi executada nesta etapa. Usar laboratório limpo, sem as fixtures
+> persistidas por Concurrency anterior. Contrato, riscos de retenção e sequência
+> completa em `docs/22-revendamais-review-approval.md` na raiz do repositório.
+
 > Atualização 3.4.11: a versão local da 0011 agora reconhece retries por dealer e
 > array completo/unânime de interations[].lead_id. Recibos continuam distintos;
 > arrays vazios/divergentes não associam. Esta versão requer NOVO ciclo no laboratório

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory=$true)][ValidateSet('Start','Bootstrap','Migrate','Verify','SqlTests','Concurrency','Status','Destroy')][string]$Action)
+param([Parameter(Mandatory=$true)][ValidateSet('Start','Bootstrap','Migrate','Verify','SqlTests','Concurrency','ReviewSetup','ReviewMigrate','ReviewVerify','ReviewTests','ReviewDiagnose','ReviewRegression','ReviewConcurrency','Status','Destroy')][string]$Action)
 $ErrorActionPreference = 'Stop'
 $settings = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'settings.json') -Raw | ConvertFrom-Json
 if ($settings.container -ne 'alencar-revendamais-pg17-lab' -or $settings.database -ne 'revendamais_leads_test' -or
@@ -31,10 +31,11 @@ function Assert-LabContainer {
   }
   return $inspect
 }
-function Invoke-LabSql([string]$Path, [bool]$SingleTransaction=$true) {
+function Invoke-LabSql([string]$Path, [bool]$SingleTransaction=$true, [string]$SqlOverride='') {
   $state = Assert-LabContainer
   if (-not $state.State.Running) { throw 'Laboratory is not running.' }
   $sqlText = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+  if ($SqlOverride) { $sqlText = $SqlOverride }
   $dockerArgs = @('exec','-i',$settings.container,'psql','-X','--no-password',
     '--host=/var/run/postgresql','--port=5432','--username=revendamais_lab',
     '--dbname=revendamais_leads_test','--set=ON_ERROR_STOP=1')
@@ -77,6 +78,59 @@ switch ($Action) {
   'Verify' {
     Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')
     Invoke-LabSql -Path (Join-Path $PSScriptRoot 'verify.sql')
+  }
+  'ReviewSetup' {
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'review-prerequisites.sql')
+  }
+  'ReviewMigrate' {
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')
+    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
+    Invoke-LabSql -Path (Join-Path $repoRoot 'drizzle/migrations/0012_revendamais_review_approval.sql')
+  }
+  'ReviewVerify' {
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'review-verify.sql')
+  }
+  'ReviewTests' {
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot '../revendamais-review.test.sql') -SingleTransaction $false
+  }
+  'ReviewDiagnose' {
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')
+    $diagnosticPath = Join-Path $PSScriptRoot 'review-diagnose.sql'
+    $diagnostic = Get-Content -LiteralPath $diagnosticPath -Raw
+    $fixture = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../revendamais-review.test.sql') -Raw
+    $fixture = $fixture -replace '(?m)^BEGIN;\r?$', '' -replace '(?m)^ROLLBACK;\r?$', ''
+    $diagnostic = $diagnostic.Replace('\ir ../revendamais-review.test.sql', $fixture)
+    Invoke-LabSql -Path $diagnosticPath -SingleTransaction $false -SqlOverride $diagnostic
+  }
+  'ReviewRegression' {
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')
+    $regressionPath = Join-Path $PSScriptRoot 'review-regression.sql'
+    $regression = Get-Content -LiteralPath $regressionPath -Raw
+    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
+    $migration = Get-Content -LiteralPath (Join-Path $repoRoot 'drizzle/migrations/0012_revendamais_review_approval.sql') -Raw
+    $start = $migration.IndexOf('CREATE FUNCTION public.get_pending_revendamais_leads(')
+    $finish = $migration.IndexOf('REVOKE ALL ON FUNCTION public.get_pending_revendamais_leads(', $start)
+    if ($start -lt 0 -or $finish -le $start) { throw 'Listing function boundary missing.' }
+    $definition = $migration.Substring($start,$finish-$start).Replace('CREATE FUNCTION public.get_pending_', 'CREATE OR REPLACE FUNCTION public.get_pending_')
+    $fixture = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../revendamais-review.test.sql') -Raw
+    $fixture = $fixture -replace '(?m)^BEGIN;\r?$', '' -replace '(?m)^ROLLBACK;\r?$', ''
+    $regression = $regression.Replace('-- LAB_RPC_DEFINITION',$definition).Replace('-- LAB_FIXTURE',$fixture)
+    Invoke-LabSql -Path $regressionPath -SingleTransaction $false -SqlOverride $regression
+  }
+  'ReviewConcurrency' {
+    $null = Assert-LabContainer
+    Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')
+    $savedOpt = $env:REVENDAMAIS_TEST_DISPOSABLE
+    $savedUrl = $env:REVENDAMAIS_TEST_DATABASE_URL
+    try {
+      $env:REVENDAMAIS_TEST_DISPOSABLE = 'YES'
+      $env:REVENDAMAIS_TEST_DATABASE_URL = 'postgresql://' + $settings.user + ':' + $settings.password + '@127.0.0.1:55432/revendamais_leads_test'
+      & node (Join-Path $PSScriptRoot '../revendamais-review-concurrency.mjs')
+      if ($LASTEXITCODE -ne 0) { throw 'Review concurrency failed in the disposable laboratory.' }
+    } finally { $env:REVENDAMAIS_TEST_DISPOSABLE = $savedOpt; $env:REVENDAMAIS_TEST_DATABASE_URL = $savedUrl }
   }
   'SqlTests' {
     Invoke-LabSql -Path (Join-Path $PSScriptRoot 'preflight.sql')

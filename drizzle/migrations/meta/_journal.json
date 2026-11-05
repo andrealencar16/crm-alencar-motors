@@ -85,6 +85,13 @@
       "when": 1793900000000,
       "tag": "0011_revendamais_lead_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793910000000,
+      "tag": "0012_revendamais_review_approval",
+      "breakpoints": true
     }
   ]
 }
