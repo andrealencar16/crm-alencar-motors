@@ -93,21 +93,26 @@ test("missing phone/ID goes to review; administrative fields and dealer contacts
   assert.equal((await h(req(payload({ id: null, client_phone: "", org_id: "forged", owner_id: "forged", stage_id: "forged", dealer_email: "forged" })))).status, 202);
 });
 
-test("channel and original date reach RPC; unknown text requires retention approval", async () => {
+test("channel/date reach RPC and unapproved text is omitted without blocking review", async () => {
   let calls = 0;
   const h = handler({ persistenceFactory: factory(async (_, args) => {
     calls++;
-    assert.equal(args.p_metadata.channelId, "10");
-    assert.equal(args.p_metadata.createdAt, "2026-09-17 08:49:53");
-    assert.equal(args.p_metadata.channelName, "Canal ficticio");
+    if (calls === 1) {
+      assert.equal(args.p_metadata.channelId, "10");
+      assert.equal(args.p_metadata.createdAt, "2026-09-17 08:49:53");
+      assert.equal(args.p_metadata.channelName, "Canal ficticio");
+    } else {
+      assert.equal(args.p_metadata.unknownTextPresent, true);
+      assert.equal(args.p_metadata.unknownInteraction, null);
+    }
     assert.equal(args.p_lead.portal, null);
     return { data: { status: "review", receiptId: id }, error: null };
   }) });
   assert.equal((await h(req(payload({ lead_channel_id: 10, channel_name: "<b>Canal ficticio</b>", created_at: "2026-09-17 08:49:53" })))).status, 202);
   const res = await h(req(payload({ interations: [{ lead_id: 100001, html: "<b>Unknown sender</b>", direction: 1, type_id: 3 }] })));
-  assert.equal(res.status, 503);
-  assert.deepEqual(await res.json(), { status: "retention_policy_required" });
-  assert.equal(calls, 1);
+  assert.equal(res.status, 202);
+  assert.deepEqual(await res.json(), { status: "review_persisted" });
+  assert.equal(calls, 2);
 });
 
 test("RPC errors and malformed confirmations never produce 2xx or internal data", async () => {
@@ -159,4 +164,13 @@ test("body timeout cancels stream and never touches persistence", async () => {
   assert.equal(res.status, 408);
   assert.equal(cancelled, true);
   assert.equal(calls, 0);
+});
+
+test("lock contention, deadlock and database cancellation remain retryable without success", async () => {
+  for (const code of ["55P03", "40P01", "57014"]) {
+    const res = await handler({ persistenceFactory: factory(async () => ({ data: null, error: { code } })) })(req());
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get("Retry-After"), "60");
+    assert.deepEqual(await res.json(), { status: "persistence_unavailable" });
+  }
 });

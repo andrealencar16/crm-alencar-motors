@@ -32,7 +32,7 @@ test("reference channel/date and unknown text are sent atomically, with no custo
     assert.equal(args.p_lead.email, null);
     assert.equal(args.p_lead.portal, null);
     assert.equal(args.p_unknown_text_retention_approved, true);
-    assert.deepEqual(args.p_metadata, { channelId: "900002", channelName: "Canal ficticio", createdAt: "2026-09-17 08:49:53",
+    assert.deepEqual(args.p_metadata, { channelId: "900002", channelName: "Canal ficticio", createdAt: "2026-09-17 08:49:53", unknownTextPresent: true,
       unknownInteraction: { text: "email: fiction@example.invalid", sourceIndex: 0, createdAt: "2026-09-17 08:49:53", authorship: "unknown" } });
     return { data: { status: "review", receiptId: id }, error: null };
   });
@@ -44,7 +44,7 @@ test("reference channel/date and unknown text are sent atomically, with no custo
 
 test("missing optional metadata is explicit null, not fabricated", async () => {
   const h = setup(async (_, args) => {
-    assert.deepEqual(args.p_metadata, { channelId: null, channelName: null, createdAt: null, unknownInteraction: null });
+    assert.deepEqual(args.p_metadata, { channelId: null, channelName: null, createdAt: null, unknownInteraction: null, unknownTextPresent: false });
     return { data: { status: "review", receiptId: id }, error: null };
   });
   assert.equal((await h(request({ dealer_id: 9325, id: "100001", title: "Teste" }))).status, 202);
@@ -92,12 +92,20 @@ test("metadata participates in simulated idempotency/conflict and staged rollbac
   assert.deepEqual([contacts, deals, receipts.length], [1,1,2]);
 });
 
-test("retention is opt-in and response does not expose text, metadata or credentials", async () => {
+test("unapproved text is omitted, presence is retained, and durable intake is not blocked", async () => {
   let calls = 0;
-  const rpc: ReceiptRpc = async () => { calls++; return { data: { status: "review", receiptId: id }, error: null }; };
-  const blocked = await setup(rpc, false, false)(request(reference()));
-  assert.equal(blocked.status, 503);
-  assert.equal(calls, 0);
+  const rpc: ReceiptRpc = async (_, args) => {
+    calls++;
+    if (!args.p_unknown_text_retention_approved) {
+      assert.equal(args.p_metadata.unknownTextPresent, true);
+      assert.equal(args.p_metadata.unknownInteraction, null);
+      assert.equal(JSON.stringify(args).includes("fiction@example.invalid"), false);
+    }
+    return { data: { status: "review", receiptId: id }, error: null };
+  };
+  const omitted = await setup(rpc, false, false)(request(reference()));
+  assert.equal(omitted.status, 202);
+  assert.equal(calls, 1);
   const res = await setup(rpc)(request(reference()));
   assert.equal(res.status, 202);
   assert.deepEqual(await res.json(), { status: "review_persisted" });
@@ -123,4 +131,50 @@ test("metadata reference cannot receive 2xx before RPC durable confirmation", as
   await started; assert.equal(replied, false);
   release({ data: { status: "review", receiptId: id }, error: null });
   assert.equal((await pending).status, 202);
+});
+
+test("complete lead with unconfirmed ID remains durable review, never implicit auto-create", async () => {
+  const res = await setup(async (_, args) => {
+    assert.equal(args.p_identity_confirmed, false);
+    assert.equal(args.p_lead.phone, "+5585999990000");
+    assert.equal(args.p_lead.externalId, "dealer:9325:lead:100001");
+    assert.equal(args.p_metadata.unknownInteraction, null);
+    return { data: { status: "review", receiptId: id }, error: null };
+  }, false, false)(request(reference({ client_phone: "85999990000" })));
+  assert.equal(res.status, 202);
+});
+
+test("confirmed identity allows auto-create without permission to retain unknown text", async () => {
+  const res = await setup(async (_, args) => {
+    assert.equal(args.p_identity_confirmed, true);
+    assert.equal(args.p_metadata.unknownTextPresent, true);
+    assert.equal(args.p_metadata.unknownInteraction, null);
+    assert.equal(args.p_lead.firstMessage, null);
+    return { data: { status: "created", contactId: id, dealId: id }, error: null };
+  }, true, false)(request(reference({ client_phone: "85999990000" })));
+  assert.equal(res.status, 201);
+});
+
+test("persistence adapter strips unapproved text even if a caller supplies it directly", async () => {
+  const store = createReceiptPersistence(async (_, args) => {
+    assert.equal(args.p_metadata.unknownInteraction, null);
+    assert.equal(args.p_metadata.unknownTextPresent, true);
+    assert.equal(JSON.stringify(args).includes("must-not-reach-database"), false);
+    return { data: { status: "review", receiptId: id }, error: null };
+  });
+  await store.commit({ provider: "revendamais", identity: "manual_review",
+    lead: { name: "Teste", phone: null, email: null, title: "Teste", portal: null, externalId: null, firstMessage: null },
+    metadata: { channelId: null, channelName: null, createdAt: null,
+      unknownInteraction: { text: "must-not-reach-database", sourceIndex: 0, createdAt: null, authorship: "unknown" } },
+  });
+});
+
+test("lock protection is retained with fail-fast acquisition; default flags remain off (static)", () => {
+  const sql = readFileSync(new URL("../drizzle/migrations/0011_revendamais_lead_receipts.sql", import.meta.url), "utf8");
+  assert.match(sql, /LOCK TABLE public.contacts IN SHARE ROW EXCLUSIVE MODE NOWAIT/);
+  assert.match(sql, /unknown_text_disposition='expired'/);
+  const example = readFileSync(new URL("../supabase/functions/revendamais-leads/.env.example", import.meta.url), "utf8");
+  assert.match(example, /REVENDAMAIS_EXTERNAL_ID_CONFIRMED=false/);
+  assert.match(example, /REVENDAMAIS_INGESTION_ENABLED=false/);
+  assert.match(example, /REVENDAMAIS_UNKNOWN_TEXT_RETENTION_APPROVED=false/);
 });

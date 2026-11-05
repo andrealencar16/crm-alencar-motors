@@ -21,6 +21,9 @@ CREATE TABLE public.revendamais_lead_receipts (
   unknown_interaction_index integer CHECK (unknown_interaction_index BETWEEN 0 AND 49),
   unknown_interaction_created_at text,
   unknown_text_expires_at timestamptz,
+  unknown_text_present boolean NOT NULL DEFAULT false,
+  unknown_text_disposition text NOT NULL DEFAULT 'absent'
+    CHECK (unknown_text_disposition IN ('absent','omitted_policy','retained','expired')),
   external_id text CHECK (char_length(external_id) <= 200),
   identity_confirmed boolean NOT NULL,
   status text NOT NULL CHECK (status IN ('processed', 'review')),
@@ -28,7 +31,7 @@ CREATE TABLE public.revendamais_lead_receipts (
   deal_id uuid REFERENCES public.deals(id) ON DELETE SET NULL,
   received_at timestamptz NOT NULL DEFAULT now(),
   processed_at timestamptz,
-  reason text CHECK (reason IN ('untrusted_identity','insufficient_contact','ambiguous_contact','identity_conflict')),
+  reason text CHECK (reason IN ('untrusted_identity','insufficient_contact','ambiguous_contact','identity_conflict','linked_records_missing')),
   -- Restricted digest detects divergent reuse of a trusted ID; never logged/exposed.
   content_digest bytea NOT NULL,
   -- Only review retains normalized fields for recovery, never the raw HTTP body.
@@ -37,13 +40,16 @@ CREATE TABLE public.revendamais_lead_receipts (
   CHECK ((status = 'processed' AND processed_at IS NOT NULL AND reason IS NULL AND review_lead IS NULL AND review_expires_at IS NULL)
       OR (status = 'review' AND processed_at IS NULL AND reason IS NOT NULL AND review_lead IS NOT NULL AND review_expires_at IS NOT NULL)),
   CHECK (NOT identity_confirmed OR external_id IS NOT NULL),
+  CHECK ((NOT unknown_text_present AND unknown_text_disposition='absent' AND unknown_interaction_text IS NULL)
+    OR (unknown_text_present AND unknown_text_disposition IN ('omitted_policy','expired') AND unknown_interaction_text IS NULL)
+    OR (unknown_text_present AND unknown_text_disposition='retained' AND unknown_interaction_text IS NOT NULL)),
   CHECK ((unknown_interaction_text IS NULL AND unknown_interaction_authorship IS NULL
     AND unknown_interaction_index IS NULL AND unknown_interaction_created_at IS NULL AND unknown_text_expires_at IS NULL)
     OR (unknown_interaction_text IS NOT NULL AND unknown_interaction_authorship IS NOT NULL
     AND unknown_interaction_index IS NOT NULL AND unknown_text_expires_at IS NOT NULL))
 );
 CREATE INDEX revendamais_receipts_identity_idx ON public.revendamais_lead_receipts(org_id, external_id)
-  WHERE identity_confirmed;
+  WHERE external_id IS NOT NULL;
 CREATE INDEX revendamais_receipts_review_idx ON public.revendamais_lead_receipts(review_expires_at)
   WHERE status = 'review';
 CREATE INDEX revendamais_receipts_unknown_expiry_idx ON public.revendamais_lead_receipts(unknown_text_expires_at)
@@ -81,6 +87,7 @@ DECLARE
   v_portal text; v_external text; v_digest bytea; v_reason text;
   v_channel_id text; v_channel_name text; v_source_date text;
   v_unknown text; v_unknown_date text; v_unknown_index integer; v_meta jsonb;
+  v_unknown_present boolean; v_disposition text;
   v_prior public.revendamais_lead_receipts%ROWTYPE;
   v_candidate public.contacts%ROWTYPE;
 BEGIN
@@ -102,8 +109,9 @@ BEGIN
     RAISE EXCEPTION 'invalid_metadata' USING ERRCODE = '22023';
   END IF;
   IF EXISTS (SELECT 1 FROM jsonb_each(p_metadata) AS e(k,v)
-    WHERE k NOT IN ('channelId','channelName','createdAt','unknownInteraction')
-    OR (k <> 'unknownInteraction' AND jsonb_typeof(v) NOT IN ('string','null'))
+    WHERE k NOT IN ('channelId','channelName','createdAt','unknownInteraction','unknownTextPresent')
+    OR (k NOT IN ('unknownInteraction','unknownTextPresent') AND jsonb_typeof(v) NOT IN ('string','null'))
+    OR (k = 'unknownTextPresent' AND jsonb_typeof(v) NOT IN ('boolean','null'))
     OR (k = 'unknownInteraction' AND jsonb_typeof(v) NOT IN ('object','null'))) THEN
     RAISE EXCEPTION 'invalid_metadata' USING ERRCODE = '22023';
   END IF;
@@ -114,10 +122,11 @@ BEGIN
     OR char_length(v_channel_name) > 100 OR NOT public.revendamais_local_date_valid(v_source_date) THEN
     RAISE EXCEPTION 'invalid_metadata' USING ERRCODE = '22023';
   END IF;
-  IF jsonb_typeof(p_metadata->'unknownInteraction') = 'object' THEN
-    IF NOT p_unknown_text_retention_approved THEN
-      RAISE EXCEPTION 'retention_policy_required' USING ERRCODE = '22023';
-    END IF;
+  v_unknown_present := coalesce((p_metadata->>'unknownTextPresent')::boolean,false)
+    OR coalesce(jsonb_typeof(p_metadata->'unknownInteraction') = 'object',false);
+  -- A defensive direct caller cannot force retention by passing content alone.
+  -- Without approval, ignore the entire object BEFORE extracting or hashing text.
+  IF jsonb_typeof(p_metadata->'unknownInteraction') = 'object' AND p_unknown_text_retention_approved THEN
     v_meta := p_metadata->'unknownInteraction';
     IF EXISTS (SELECT 1 FROM jsonb_each(v_meta) AS e(k,v) WHERE
       k NOT IN ('text','sourceIndex','createdAt','authorship')
@@ -133,8 +142,10 @@ BEGIN
     v_unknown_index := (v_meta->>'sourceIndex')::integer;
     IF v_unknown_index > 49 THEN RAISE EXCEPTION 'invalid_metadata' USING ERRCODE = '22023'; END IF;
   END IF;
+  v_disposition := CASE WHEN v_unknown IS NOT NULL THEN 'retained'
+    WHEN v_unknown_present THEN 'omitted_policy' ELSE 'absent' END;
   v_meta := jsonb_build_object('channelId',v_channel_id,'channelName',v_channel_name,'createdAt',v_source_date,
-    'unknownText',v_unknown,'unknownCreatedAt',v_unknown_date,'unknownIndex',v_unknown_index);
+    'unknownText',v_unknown,'unknownCreatedAt',v_unknown_date,'unknownIndex',v_unknown_index,'unknownTextPresent',v_unknown_present);
   v_name := nullif(btrim(p_lead->>'name'), '');
   v_phone := nullif(btrim(p_lead->>'phone'), '');
   v_email := nullif(btrim(p_lead->>'email'), '');
@@ -160,13 +171,19 @@ BEGIN
     'title',v_title,'firstMessage',v_message,'portal',v_portal,'externalId',v_external,'metadata',v_meta)::text,'UTF8'), 'sha256');
   IF p_identity_confirmed THEN
     SELECT * INTO v_prior FROM public.revendamais_lead_receipts
-      WHERE org_id = v_org AND identity_confirmed AND external_id = v_external
-      ORDER BY (content_digest = v_digest) DESC, (status = 'processed') DESC, received_at, id LIMIT 1;
+      -- Also respect reviews received before identity was confirmed: flipping a
+      -- flag must not silently promote pending reviews into new CRM records.
+      WHERE org_id = v_org AND external_id = v_external
+      ORDER BY (content_digest = v_digest) DESC,
+        (status = 'processed' AND contact_id IS NOT NULL AND deal_id IS NOT NULL) DESC,
+        (status = 'review') DESC, received_at, id LIMIT 1 FOR UPDATE;
     IF FOUND THEN
       IF v_prior.content_digest IS DISTINCT FROM v_digest THEN
         v_reason := 'identity_conflict';
       ELSIF v_prior.status = 'processed' AND v_prior.contact_id IS NOT NULL AND v_prior.deal_id IS NOT NULL THEN
         RETURN jsonb_build_object('status','duplicate','contactId',v_prior.contact_id,'dealId',v_prior.deal_id);
+      ELSIF v_prior.status = 'processed' THEN
+        v_reason := 'linked_records_missing';
       ELSE
         RETURN jsonb_build_object('status','review','receiptId',v_prior.id);
       END IF;
@@ -178,8 +195,10 @@ BEGIN
     IF v_phone IS NULL AND v_email IS NULL THEN
       v_reason := 'insufficient_contact';
     ELSE
-      -- Coordinates with ordinary UI writes too; bounded lock wait, single org.
-      LOCK TABLE public.contacts IN SHARE ROW EXCLUSIVE MODE;
+      -- Existing UI writers do not share advisory locks and channels are not UNIQUE.
+      -- Retain protection of absent matches; NOWAIT fails fast rather than queuing
+      -- a table-wide waiter behind an operational UI transaction. No lock on review/duplicate.
+      LOCK TABLE public.contacts IN SHARE ROW EXCLUSIVE MODE NOWAIT;
       SELECT count(*) INTO v_count FROM public.contacts c WHERE c.org_id = v_org AND
         ((v_phone IS NOT NULL AND public.revendamais_match_phone(c.phone) = v_phone)
          OR (v_email IS NOT NULL AND lower(btrim(c.email)) = v_email));
@@ -202,12 +221,13 @@ BEGIN
     INSERT INTO public.revendamais_lead_receipts(org_id, portal, external_id, identity_confirmed,
       status, reason, content_digest, review_lead, review_expires_at,
       channel_external_id,channel_name,source_created_at,unknown_interaction_text,
-      unknown_interaction_authorship,unknown_interaction_index,unknown_interaction_created_at,unknown_text_expires_at)
+      unknown_interaction_authorship,unknown_interaction_index,unknown_interaction_created_at,unknown_text_expires_at,
+      unknown_text_present,unknown_text_disposition)
     VALUES(v_org,v_portal,v_external,p_identity_confirmed,'review',v_reason,v_digest,
       jsonb_build_object('name',v_name,'phone',v_phone,'email',v_email,'title',v_title,'firstMessage',v_message),
       now() + interval '30 days',v_channel_id,v_channel_name,v_source_date,v_unknown,
       CASE WHEN v_unknown IS NOT NULL THEN 'unknown' END,v_unknown_index,v_unknown_date,
-      CASE WHEN v_unknown IS NOT NULL THEN now() + interval '30 days' END) RETURNING id INTO v_receipt;
+      CASE WHEN v_unknown IS NOT NULL THEN now() + interval '30 days' END,v_unknown_present,v_disposition) RETURNING id INTO v_receipt;
     RETURN jsonb_build_object('status','review','receiptId',v_receipt);
   END IF;
   IF v_contact IS NULL THEN
@@ -229,11 +249,12 @@ BEGIN
   INSERT INTO public.revendamais_lead_receipts(org_id,portal,external_id,identity_confirmed,status,
     contact_id,deal_id,processed_at,content_digest,
     channel_external_id,channel_name,source_created_at,unknown_interaction_text,
-    unknown_interaction_authorship,unknown_interaction_index,unknown_interaction_created_at,unknown_text_expires_at)
+    unknown_interaction_authorship,unknown_interaction_index,unknown_interaction_created_at,unknown_text_expires_at,
+    unknown_text_present,unknown_text_disposition)
     VALUES(v_org,v_portal,v_external,p_identity_confirmed,'processed',v_contact,v_deal,now(),v_digest,
       v_channel_id,v_channel_name,v_source_date,v_unknown,
       CASE WHEN v_unknown IS NOT NULL THEN 'unknown' END,v_unknown_index,v_unknown_date,
-      CASE WHEN v_unknown IS NOT NULL THEN now() + interval '30 days' END);
+      CASE WHEN v_unknown IS NOT NULL THEN now() + interval '30 days' END,v_unknown_present,v_disposition);
   RETURN jsonb_build_object('status','created','contactId',v_contact,'dealId',v_deal);
   -- Uncaught errors roll back ALL writes, including contact, note and receipt.
 END $$;
@@ -253,7 +274,7 @@ BEGIN
   GET DIAGNOSTICS n = ROW_COUNT;
   UPDATE public.revendamais_lead_receipts SET unknown_interaction_text=NULL,
     unknown_interaction_authorship=NULL,unknown_interaction_index=NULL,
-    unknown_interaction_created_at=NULL,unknown_text_expires_at=NULL
+    unknown_interaction_created_at=NULL,unknown_text_expires_at=NULL,unknown_text_disposition='expired'
     WHERE org_id=public.main_org_id() AND unknown_text_expires_at <= now();
   GET DIAGNOSTICS v_cleared = ROW_COUNT;
   RETURN n + v_cleared;

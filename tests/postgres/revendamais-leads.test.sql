@@ -123,13 +123,18 @@ DECLARE
   m jsonb := '{"channelId":"900002","channelName":"Canal ficticio","createdAt":"2026-09-17 08:49:53","unknownInteraction":{"text":"Texto sem autoria","sourceIndex":0,"createdAt":"2026-09-17 08:49:53","authorship":"unknown"}}';
   r jsonb; receipt uuid; digest_before bytea; before_c integer; before_d integer; before_r integer;
 BEGIN
+  r := public.revendamais_commit_lead(l || '{"externalId":"dealer:9325:lead:100008"}',false,m,false);
+  IF r->>'status' IS DISTINCT FROM 'review' OR NOT EXISTS (
+    SELECT 1 FROM public.revendamais_lead_receipts WHERE id=(r->>'receiptId')::uuid
+    AND unknown_interaction_text IS NULL AND unknown_text_expires_at IS NULL
+    AND unknown_text_present AND unknown_text_disposition='omitted_policy'
+    AND channel_external_id='900002' AND source_created_at='2026-09-17 08:49:53'
+  ) THEN RAISE EXCEPTION 'Unapproved text blocked intake or was retained'; END IF;
+  r := public.revendamais_commit_lead(l || '{"externalId":"dealer:9325:lead:100008"}',true,m,false);
+  IF r->>'status' IS DISTINCT FROM 'review' THEN RAISE EXCEPTION 'Flag change silently promoted pending review'; END IF;
   SELECT count(*) INTO before_c FROM public.contacts;
   SELECT count(*) INTO before_d FROM public.deals;
   SELECT count(*) INTO before_r FROM public.revendamais_lead_receipts;
-  BEGIN
-    PERFORM public.revendamais_commit_lead(l,true,m,false);
-    RAISE EXCEPTION 'Unknown text without retention approval';
-  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
   -- Failure of receipt audit also rolls back CRM creations with metadata.
   PERFORM set_config('revendamais_test.fail_table','revendamais_lead_receipts',true);
   BEGIN
@@ -170,5 +175,24 @@ BEGIN
     PERFORM public.revendamais_commit_lead(l,true,m || '{"createdAt":"2026-02-30 08:00:00"}',true);
     RAISE EXCEPTION 'Invalid date accepted';
   EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  -- Direct RPC defense: unapproved text is not stored or included in the digest.
+  r := public.revendamais_commit_lead(l || '{"externalId":"dealer:9325:lead:100010"}',true,m,false);
+  IF r->>'status' IS DISTINCT FROM 'created' THEN RAISE EXCEPTION 'Omitted text blocked creation'; END IF;
+  r := public.revendamais_commit_lead(l || '{"externalId":"dealer:9325:lead:100010"}',true,
+    jsonb_set(m,'{unknownInteraction,text}','"Different unapproved text"'),false);
+  IF r->>'status' IS DISTINCT FROM 'duplicate' THEN RAISE EXCEPTION 'Unapproved text affected digest'; END IF;
+  IF EXISTS (SELECT 1 FROM public.revendamais_lead_receipts WHERE external_id='dealer:9325:lead:100010'
+    AND (unknown_interaction_text IS NOT NULL OR unknown_text_disposition<>'omitted_policy')) THEN
+    RAISE EXCEPTION 'Unapproved text retained';
+  END IF;
+  DELETE FROM public.deals WHERE id=(r->>'dealId')::uuid;
+  r := public.revendamais_commit_lead(l || '{"externalId":"dealer:9325:lead:100010"}',true,m,false);
+  IF r->>'status' IS DISTINCT FROM 'review' OR NOT EXISTS (
+    SELECT 1 FROM public.revendamais_lead_receipts WHERE id=(r->>'receiptId')::uuid
+      AND status='review' AND reason='linked_records_missing'
+  ) THEN RAISE EXCEPTION 'Missing linkage did not create durable recovery'; END IF;
+  receipt := (r->>'receiptId')::uuid;
+  r := public.revendamais_commit_lead(l || '{"externalId":"dealer:9325:lead:100010"}',true,m,false);
+  IF (r->>'receiptId')::uuid IS DISTINCT FROM receipt THEN RAISE EXCEPTION 'Recovery review duplicated'; END IF;
 END $$;
 ROLLBACK;

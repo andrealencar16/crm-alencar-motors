@@ -14,10 +14,10 @@ try {
   assert.deepEqual(before, { c: 0, d: 0, r: 0 });
   const lead = { name: 'Pessoa Ficticia', phone: '+5585999990000', email: 'fiction@example.invalid',
     title: 'Concorrencia ficticia', firstMessage: 'Teste', portal: null, externalId: 'concurrency-fixture' };
-  const deliver = () => sql.begin(async tx => {
+  const deliver = (event = lead) => sql.begin(async tx => {
     await tx`select set_config('request.jwt.claim.role','service_role',true)`;
     await tx`set local role service_role`;
-    const [row] = await tx`select public.revendamais_commit_lead(${tx.json(lead)},true) as result`;
+    const [row] = await tx`select public.revendamais_commit_lead(${tx.json(event)},true) as result`;
     return row.result;
   });
   const results = await Promise.all([deliver(), deliver()]);
@@ -27,5 +27,16 @@ try {
     (select count(*) from public.deals)::int as d, (select count(*) from public.activities)::int as a,
     (select count(*) from public.revendamais_lead_receipts)::int as r`;
   assert.deepEqual(after, { c: 1, d: 1, a: 1, r: 1 });
+  const interests = await Promise.all([
+    deliver({ ...lead, externalId: 'concurrency-interest-a' }),
+    deliver({ ...lead, externalId: 'concurrency-interest-b' }),
+  ]);
+  assert.ok(interests.every(r => r.status === 'created'));
+  assert.equal(interests[0].contactId, interests[1].contactId);
+  assert.notEqual(interests[0].dealId, interests[1].dealId);
+  const [final] = await sql`select (select count(*) from public.contacts)::int as c,
+    (select count(*) from public.deals)::int as d, (select count(*) from public.activities)::int as a,
+    (select count(*) from public.revendamais_lead_receipts)::int as r`;
+  assert.deepEqual(final, { c: 1, d: 3, a: 3, r: 3 });
   console.log('Two-session duplicate delivery passed. Destroy disposable DB after inspection.');
 } finally { await sql.end(); }

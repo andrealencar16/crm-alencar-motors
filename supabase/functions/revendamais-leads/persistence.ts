@@ -26,7 +26,9 @@ export function createReceiptPersistence(rpc: ReceiptRpc, options: { externalIde
             channelId: command.metadata?.channelId ?? null,
             channelName: command.metadata?.channelName ?? null,
             createdAt: command.metadata?.createdAt ?? null,
-            unknownInteraction: command.metadata?.unknownInteraction ? {
+            unknownTextPresent: command.metadata?.unknownTextPresent === true || !!command.metadata?.unknownInteraction,
+            // Defense in depth: do not even send unapproved content to Postgres.
+            unknownInteraction: options.unknownTextRetentionApproved === true && command.metadata?.unknownInteraction ? {
               text: command.metadata.unknownInteraction.text,
               sourceIndex: command.metadata.unknownInteraction.sourceIndex,
               createdAt: command.metadata.unknownInteraction.createdAt,

@@ -1,5 +1,9 @@
 # Etapa 3.4.1 — metadados no recibo transacional
 
+> Histórico: a etapa 3.4.4 substituiu o bloqueio por retenção pela omissão somente
+> do texto não autorizado com registro de presença. Estado atual, locks e critérios
+> para aplicação estão em `19-revendamais-final-blockers.md`.
+
 Estado atual: código preparado e testado em memória, migration 0011 NÃO aplicada.
 Nenhum SQL, operação remota ou recebimento real foi executado. Não há nova
 migration: foi ajustada somente 0011, conforme autorização e por não estar aplicada.

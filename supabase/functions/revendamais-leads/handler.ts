@@ -75,7 +75,6 @@ export function createHandler(deps: {
       // Preserve first useful text in source order, without inferring sender or chronology.
       const sourceIndex = event.metadata.interactions.findIndex(i => i.text !== null);
       const unknown = sourceIndex >= 0 ? event.metadata.interactions[sourceIndex] : null;
-      const retentionBlocked = unknown !== null && deps.unknownTextRetentionApproved !== true;
       const factory = deps.persistenceFactory;
       const controller = new AbortController();
       // channel_name can be a campaign/manual channel; do not label it as a portal.
@@ -84,12 +83,12 @@ export function createHandler(deps: {
           channelId: event.metadata.channelId,
           channelName: typeof event.fields.portal === "string" ? event.fields.portal : null,
           createdAt: event.metadata.createdAt,
-          unknownInteraction: unknown ? { text: unknown.text!, sourceIndex,
+          unknownTextPresent: unknown !== null,
+          unknownInteraction: unknown && deps.unknownTextRetentionApproved === true ? { text: unknown.text!, sourceIndex,
             createdAt: unknown.createdAt, authorship: "unknown" } : null,
         },
         externalIdIsStable: deps.externalIdIsStable === true,
         persistence: { commit: command => {
-          if (retentionBlocked) throw new Error();
           if (!factory) throw new Error();
           return factory(controller.signal).commit(command);
         } },
@@ -105,7 +104,7 @@ export function createHandler(deps: {
           case "duplicate": return reply(200, "duplicate");
           case "review": return reply(202, "review_persisted");
           case "invalid": return reply(400, "invalid_event");
-          default: return reply(503, retentionBlocked ? "retention_policy_required" : "persistence_unavailable");
+          default: return reply(503, "persistence_unavailable");
         }
       } catch { return reply(504, "persistence_timeout"); }
       finally { clearTimeout(persistTimer); }
