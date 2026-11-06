@@ -1,6 +1,8 @@
 import { createRevendaMaisAdapterFromEnv } from "./server-config.ts";
 import { createLeadProcessor } from "./processing.ts";
 import type { LeadPersistence } from "./processing.ts";
+import { diagnosticOf, logRejection } from "./diagnostics.ts";
+import type { ValidationDiagnostic } from "./diagnostics.ts";
 
 export const MAX_BYTES = 64 * 1024;
 const SECRET_PATTERN = /^[a-f0-9]{64}$/;
@@ -10,6 +12,10 @@ async function matches(candidate: string, expected: string) {
   let difference = 0;
   for (let i = 0; i < hashes[0].length; i++) difference |= hashes[0][i] ^ hashes[1][i];
   return difference === 0;
+}
+function rejected(status: number, code: string, d: ValidationDiagnostic) {
+  logRejection(status, code, d);
+  return reply(status, code);
 }
 function reply(status: number, code: string, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify({ status: code }), { status, headers: {
@@ -38,11 +44,11 @@ export function createHandler(deps: {
       catch { return reply(503, "unavailable"); }
       const mime = (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
       if (!(mime === "application/json" || /^application\/[a-z0-9!#$&^_.+-]+\+json$/.test(mime)) ||
-        (req.headers.get("content-encoding") ?? "identity") !== "identity") return reply(415, "unsupported_media_type");
+        (req.headers.get("content-encoding") ?? "identity") !== "identity") return rejected(415, "unsupported_media_type", { code: "unsupported_media_type", field: "content-type" });
       const length = req.headers.get("content-length");
-      if (length !== null && !/^\d+$/.test(length)) return reply(400, "invalid_body");
-      if (length !== null && Number(length) > MAX_BYTES) return reply(413, "payload_too_large");
-      if (!req.body) return reply(400, "invalid_body");
+      if (length !== null && !/^\d+$/.test(length)) return rejected(400, "invalid_body", { code: "invalid_content_length", field: "content-length" });
+      if (length !== null && Number(length) > MAX_BYTES) return rejected(413, "payload_too_large", { code: "content_length_exceeded", field: "content-length", detail: { bytes: Number(length), limit: MAX_BYTES } });
+      if (!req.body) return rejected(400, "invalid_body", { code: "missing_body", field: "body" });
       const reader = req.body.getReader();
       const buffer = new Uint8Array(MAX_BYTES);
       let bytes = 0, reads = 0, timedOut = false;
@@ -56,22 +62,23 @@ export function createHandler(deps: {
         while (true) {
           const part = await Promise.race([reader.read(), deadline]);
           if (part.done) break;
-          if (++reads > 4096) { void reader.cancel().catch(() => {}); return reply(400, "invalid_body"); }
+          if (++reads > 4096) { void reader.cancel().catch(() => {}); return rejected(400, "invalid_body", { code: "too_many_chunks", field: "body", detail: { limit: 4096 } }); }
           if (bytes + part.value.byteLength > MAX_BYTES) {
-            void reader.cancel().catch(() => {}); return reply(413, "payload_too_large");
+            void reader.cancel().catch(() => {}); return rejected(413, "payload_too_large", { code: "body_size_exceeded", field: "body", detail: { limit: MAX_BYTES } });
           }
           buffer.set(part.value, bytes); bytes += part.value.byteLength;
         }
-      } catch { return reply(timedOut ? 408 : 400, timedOut ? "body_timeout" : "invalid_body"); }
+      } catch { return rejected(timedOut ? 408 : 400, timedOut ? "body_timeout" : "invalid_body", { code: timedOut ? "body_timeout" : "body_read_failed", field: "body" }); }
       finally { clearTimeout(timer); reader.releaseLock(); }
       let body: unknown;
       try { body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, bytes))); }
-      catch { return reply(400, "invalid_body"); }
+      catch { return rejected(400, "invalid_body", { code: "json_parse_failed", field: "body", detail: { bytes } }); }
       let event;
       try { event = adapter.inspect(body); }
       catch (error) {
         return error instanceof Error && error.message === "revendamais_dealer_mismatch"
-          ? reply(403, "dealer_not_authorized") : reply(400, "invalid_event");
+          ? reply(403, "dealer_not_authorized")
+          : rejected(400, "invalid_event", diagnosticOf(error) ?? { code: "unclassified", field: "adapter" });
       }
       // Preserve first useful text in source order, without inferring sender or chronology.
       const sourceIndex = event.metadata.interactions.findIndex(i => i.text !== null);
@@ -108,7 +115,7 @@ export function createHandler(deps: {
           case "created": return reply(201, "created");
           case "duplicate": return reply(200, "duplicate");
           case "review": return reply(202, "review_persisted");
-          case "invalid": return reply(400, "invalid_event");
+          case "invalid": return rejected(400, "invalid_event", result.diagnostic ?? { code: "unclassified", field: "lead" });
           default: return reply(503, "persistence_unavailable");
         }
       } catch { return reply(504, "persistence_timeout"); }

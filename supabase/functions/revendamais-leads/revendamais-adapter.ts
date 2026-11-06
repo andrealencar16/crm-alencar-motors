@@ -1,6 +1,8 @@
 import type { AdaptedLead, LeadAdapter } from "./lead.ts";
 import { analyzeRetryLeadIds } from "./retry-identity.ts";
 import type { RetryIdentityStatus } from "./retry-identity.ts";
+import { ValidationFailure, typeOf } from "./diagnostics.ts";
+import type { DiagnosticDetail } from "./diagnostics.ts";
 
 /** Configuration is trusted server code, never derived from payload fields. */
 export type RevendaMaisConfig = {
@@ -24,7 +26,9 @@ export type RevendaMaisEvent = {
   };
 };
 
-function invalid(): never { throw new Error("invalid_revendamais_payload"); }
+function invalid(code: string, field: string, type?: string, detail?: DiagnosticDetail): never {
+  throw new ValidationFailure({ code, field, type, detail });
+}
 function identifier(value: unknown): string | null {
   if (typeof value === "number") return Number.isSafeInteger(value) && value > 0 ? String(value) : null;
   return typeof value === "string" && /^[1-9][0-9]{0,39}$/.test(value) ? value : null;
@@ -35,36 +39,39 @@ function requiredIdentifier(value: unknown): string {
   if (id === null) throw new Error("invalid_revendamais_configuration");
   return id;
 }
-function str(value: unknown, max: number): string | null {
+function str(value: unknown, max: number, field: string): string | null {
   if (value === undefined || value === null) return null;
-  if (typeof value !== "string" || value.length > max || value.includes("\0")) invalid();
+  if (typeof value !== "string") invalid("unexpected_type", field, typeOf(value), { expected: "string" });
+  if (value.length > max) invalid("length_exceeded", field, "string", { length: value.length, limit: max });
+  if (value.includes("\0")) invalid("nul_character", field, "string");
   return value.trim() || null;
 }
-function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) invalid();
+function record(value: unknown, field: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) invalid("unexpected_type", field, typeOf(value), { expected: "object" });
   return value as Record<string, unknown>;
 }
-function enumNumber(value: unknown): number | null {
+function enumNumber(value: unknown, field: string): number | null {
   if (value === undefined || value === null) return null;
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) invalid();
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) invalid("unexpected_type", field, typeOf(value), { expected: "integer" });
+  if (value < 0) invalid("out_of_range", field, "integer", { min: 0 });
   return value;
 }
-function localDate(value: unknown): string | null {
-  const s = str(value, 19);
+function localDate(value: unknown, field: string): string | null {
+  const s = str(value, 19, field);
   if (!s) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(s);
-  if (!m) invalid();
+  if (!m) invalid("date_format_mismatch", field, "string", { length: s.length, expected: "YYYY-MM-DD HH:MM:SS" });
   const [y, month, day, h, min, sec] = m.slice(1).map(Number);
   const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
   const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  if (y < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1] || h > 23 || min > 59 || sec > 59) invalid();
+  if (y < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1] || h > 23 || min > 59 || sec > 59) invalid("date_out_of_range", field, "string");
   return s; // Do not pass through Date.parse/toISOString or assign any timezone.
 }
 
 // This is deliberately a conservative text extractor, NOT an HTML sanitizer.
 // Its output must still only be rendered as text (never innerHTML/Markdown HTML).
-export function htmlToPlainText(html: string): string {
-  if (html.length > 12000) invalid();
+export function htmlToPlainText(html: string, field = "html"): string {
+  if (html.length > 12000) invalid("length_exceeded", field, "string", { length: html.length, limit: 12000 });
   const blocked = new Set(["script", "style", "iframe", "object", "svg", "math", "template", "noscript"]);
   const voids = new Set(["br", "hr", "img", "input", "meta", "link", "wbr", "area", "base", "embed", "source", "track", "param", "col"]);
   const suppressed: string[] = [];
@@ -85,7 +92,7 @@ export function htmlToPlainText(html: string): string {
     }
     // Malformed tag remainder is dropped conservatively.
     if (j === html.length) break;
-    if (++tags > 512) invalid();
+    if (++tags > 512) invalid("html_tag_limit_exceeded", field, "string", { limit: 512 });
     const tag = /^<\s*(\/?)\s*([a-z][a-z0-9:-]*)\b/i.exec(html.slice(i, j + 1));
     if (tag) {
       const close = !!tag[1], name = tag[2].toLowerCase();
@@ -93,7 +100,7 @@ export function htmlToPlainText(html: string): string {
         depth = Math.max(0, depth - 1);
         if (suppressed.at(-1) === name) suppressed.pop();
       } else if (!voids.has(name)) {
-        if (++depth > 32) invalid();
+        if (++depth > 32) invalid("html_depth_exceeded", field, "string", { limit: 32 });
         if (blocked.has(name)) suppressed.push(name);
       }
       if (!suppressed.length) result += " ";
@@ -115,26 +122,29 @@ function boundedJson(raw: unknown): void {
   const seen = new Set<object>();
   let nodes = 0, characters = 0;
   function walk(value: unknown, depth: number): void {
-    if (++nodes > 2048 || depth > 8) invalid();
+    if (++nodes > 2048) invalid("json_node_limit_exceeded", "payload", undefined, { limit: 2048 });
+    if (depth > 8) invalid("json_depth_exceeded", "payload", undefined, { depth, limit: 8 });
     if (value === null || typeof value === "boolean") return;
-    if (typeof value === "string") { characters += value.length; if (characters > 65536) invalid(); return; }
-    if (typeof value === "number") { if (!Number.isFinite(value)) invalid(); return; }
-    if (typeof value !== "object" || !value || seen.has(value)) invalid();
-    if (Object.getPrototypeOf(value) !== Object.prototype && !Array.isArray(value)) invalid();
+    if (typeof value === "string") { characters += value.length; if (characters > 65536) invalid("json_characters_exceeded", "payload", undefined, { limit: 65536 }); return; }
+    if (typeof value === "number") { if (!Number.isFinite(value)) invalid("non_finite_number", "payload", "number_non_finite"); return; }
+    if (typeof value !== "object" || !value || seen.has(value)) invalid("json_unsupported_node", "payload", typeOf(value));
+    if (Object.getPrototypeOf(value) !== Object.prototype && !Array.isArray(value)) invalid("json_unsupported_prototype", "payload");
     seen.add(value);
     const keys = Object.keys(value);
-    if (keys.length > 128) invalid();
+    if (keys.length > 128) invalid("json_key_limit_exceeded", "payload", "object", { keys: keys.length, limit: 128 });
     for (const key of keys) {
       characters += key.length;
-      if (key.length > 200 || characters > 65536) invalid();
+      if (key.length > 200) invalid("json_key_length_exceeded", "payload", "string", { length: key.length, limit: 200 });
+      if (characters > 65536) invalid("json_characters_exceeded", "payload", undefined, { limit: 65536 });
       const d = Object.getOwnPropertyDescriptor(value, key);
-      if (!d || !('value' in d)) invalid();
+      if (!d || !('value' in d)) invalid("json_accessor_property", "payload");
       walk(d.value, depth + 1);
     }
     seen.delete(value);
   }
   walk(raw, 0);
-  if (new TextEncoder().encode(JSON.stringify(raw)).length > 65536) invalid();
+  const size = new TextEncoder().encode(JSON.stringify(raw)).length;
+  if (size > 65536) invalid("json_size_exceeded", "payload", undefined, { bytes: size, limit: 65536 });
 }
 
 export function createRevendaMaisAdapter(config: RevendaMaisConfig): {
@@ -144,28 +154,29 @@ export function createRevendaMaisAdapter(config: RevendaMaisConfig): {
   const policy = config.customerInteraction ? {
     direction: config.customerInteraction.direction, typeIds: [...config.customerInteraction.typeIds],
   } : null;
-  if (policy && (enumNumber(policy.direction) === null || !policy.typeIds.length || policy.typeIds.length > 20 || policy.typeIds.some(n => enumNumber(n) === null))) {
+  if (policy && (enumNumber(policy.direction, "config.direction") === null || !policy.typeIds.length || policy.typeIds.length > 20 || policy.typeIds.some(n => enumNumber(n, "config.type_ids") === null))) {
     throw new Error("invalid_revendamais_configuration");
   }
   function inspect(raw: unknown): RevendaMaisEvent {
     boundedJson(raw);
-    const p = record(raw);
+    const p = record(raw, "payload");
     if (identifier(p.dealer_id) !== dealer) throw new Error("revendamais_dealer_mismatch");
     const attemptId = identifier(p.id);
     const channelId = identifier(p.lead_channel_id);
-    if (p.lead_channel_id != null && channelId === null) invalid();
-    if (p.interations != null && !Array.isArray(p.interations)) invalid();
+    if (p.lead_channel_id != null && channelId === null) invalid("invalid_identifier", "lead_channel_id", typeOf(p.lead_channel_id));
+    if (p.interations != null && !Array.isArray(p.interations)) invalid("unexpected_type", "interations", typeOf(p.interations), { expected: "array" });
     const input = (p.interations ?? []) as unknown[];
-    if (input.length > 50) invalid();
-    const interactions = input.map(value => {
-      const item = record(value), interactionLead = identifier(item.lead_id);
+    if (input.length > 50) invalid("array_length_exceeded", "interations", "array", { length: input.length, limit: 50 });
+    const interactions = input.map((value, index) => {
+      const at = `interations[${index}]`;
+      const item = record(value, at), interactionLead = identifier(item.lead_id);
       // Root id is a DELIVERY attempt and may differ on every retry. Never compare
       // it to interations[].lead_id as if it were a stable lead identifier.
       // Missing/malformed IDs disable association, but do not discard the delivery.
-      const html = str(item.html, 12000);
-      return Object.freeze({ leadId: interactionLead, direction: enumNumber(item.direction),
-        typeId: enumNumber(item.type_id), text: html ? htmlToPlainText(html) || null : null,
-        createdAt: localDate(item.created_at) });
+      const html = str(item.html, 12000, `${at}.html`);
+      return Object.freeze({ leadId: interactionLead, direction: enumNumber(item.direction, `${at}.direction`),
+        typeId: enumNumber(item.type_id, `${at}.type_id`), text: html ? htmlToPlainText(html, `${at}.html`) || null : null,
+        createdAt: localDate(item.created_at, `${at}.created_at`) });
     });
     const retryIdentity = analyzeRetryLeadIds(interactions.map(i => i.leadId));
     let selection: RevendaMaisEvent["metadata"]["messageSelection"] = policy ? "none" : "unconfirmed_sender";
@@ -182,16 +193,16 @@ export function createRevendaMaisAdapter(config: RevendaMaisConfig): {
         }
       }
     }
-    const channel = str(p.channel_name, 12000);
+    const channel = str(p.channel_name, 12000, "channel_name");
     return { fields: {
-      name: str(p.client_name, 200), phone: str(p.client_phone, 40), email: null,
-      title: str(p.title, 300) ?? "Interesse recebido pelo Revenda Mais", firstMessage, portal: channel ? htmlToPlainText(channel) || null : null,
+      name: str(p.client_name, 200, "client_name"), phone: str(p.client_phone, 40, "client_phone"), email: null,
+      title: str(p.title, 300, "title") ?? "Interesse recebido pelo Revenda Mais", firstMessage, portal: channel ? htmlToPlainText(channel, "channel_name") || null : null,
       // No confirmed stable commercial identifier exists in the current contract.
       externalId: null,
     }, metadata: { dealerId: dealer, deliveryAttemptId: attemptId,
       sourceLeadIdHint: interactions.find(i => i.leadId !== null)?.leadId ?? null,
       retryIdentityStatus: retryIdentity.status, retryLeadId: retryIdentity.leadId,
-      channelId, createdAt: localDate(p.created_at), timezone: "unspecified",
+      channelId, createdAt: localDate(p.created_at, "created_at"), timezone: "unspecified",
       interactions: Object.freeze(interactions), messageSelection: selection, attemptIdStatus: attemptId ? "available" : "missing_or_invalid" } };
   }
   return { inspect, map: (raw) => inspect(raw).fields };

@@ -1,6 +1,7 @@
 import { normalizeLead } from "./lead.ts";
 import type { Lead, LeadAdapter } from "./lead.ts";
 import type { LeadMetadata } from "./metadata.ts";
+import type { ValidationDiagnostic } from "./diagnostics.ts";
 
 export type CommitResult =
   | { status: "created"; contactId: string; dealId: string }
@@ -21,7 +22,7 @@ export interface LeadPersistence {
   }>): Promise<CommitResult>;
 }
 
-export type ProcessingResult = CommitResult | { status: "invalid" } | { status: "retry" };
+export type ProcessingResult = CommitResult | { status: "invalid"; diagnostic?: ValidationDiagnostic } | { status: "retry" };
 
 export function createLeadProcessor(deps: {
   adapter: LeadAdapter;
@@ -32,7 +33,7 @@ export function createLeadProcessor(deps: {
 }) {
   return async (raw: unknown): Promise<ProcessingResult> => {
     const normalized = normalizeLead(raw, deps.adapter);
-    if (!normalized.ok) return { status: "invalid" };
+    if (!normalized.ok) return normalized.diagnostic ? { status: "invalid", diagnostic: normalized.diagnostic } : { status: "invalid" };
     try {
       const result = await deps.persistence.commit({
         provider: "revendamais",
